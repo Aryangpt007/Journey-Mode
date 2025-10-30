@@ -1,0 +1,52 @@
+# Gradle
+.gradle/
+build/
+out/
+classes/
+
+# Eclipse
+*.launch
+.settings/
+.metadata
+.classpath
+.project
+eclipse/
+*.pydevproject
+.pydevproject
+
+# IntelliJ IDEA
+*.iml
+*.ipr
+*.iws
+.idea/
+atlassian-ide-plugin.xml
+
+# NetBeans
+nbproject/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Minecraft
+run/
+logs/
+crash-reports/
+
+# NeoForge/Gradle
+.gradle/
+bin/
+src/generated/
+
+# Misc
+*.log
+*.bak
+*.swp
+*.tmp
+~*
