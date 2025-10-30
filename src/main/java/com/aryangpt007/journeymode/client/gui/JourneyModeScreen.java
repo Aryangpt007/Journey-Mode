@@ -117,11 +117,11 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             guiGraphics.fill(slotX, slotY, slotX + 16, slotY + 16, 0xFF8B8B8B);
         }
         
-        // Draw player inventory slot backgrounds
+        // Draw player inventory slot backgrounds (updated to match new positions)
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 9; ++col) {
                 int slotX = x + 8 + col * 18;
-                int slotY = y + 84 + row * 18;
+                int slotY = y + 110 + row * 18; // Updated from y + 84
                 // Slot border
                 guiGraphics.fill(slotX - 1, slotY - 1, slotX + 17, slotY + 17, 0xFF373737);
                 // Slot background
@@ -129,10 +129,10 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             }
         }
         
-        // Draw hotbar slot backgrounds
+        // Draw hotbar slot backgrounds (updated to match new positions)
         for (int col = 0; col < 9; ++col) {
             int slotX = x + 8 + col * 18;
-            int slotY = y + 142;
+            int slotY = y + 168; // Updated from y + 142
             // Slot border
             guiGraphics.fill(slotX - 1, slotY - 1, slotX + 17, slotY + 17, 0xFF373737);
             // Slot background

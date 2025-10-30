@@ -95,6 +95,18 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📋 Changelog
 
+### Version 1.3.3
+**Release Date:** October 30, 2025
+
+#### Bug Fix
+- 🔧 **Fixed Slot Outlines**: Slot borders/backgrounds now match actual slot positions
+  - Updated inventory slot outlines: y=84 → y=110
+  - Updated hotbar slot outlines: y=142 → y=168
+  - Outlines now perfectly align with clickable slot areas
+  - Visual consistency restored
+
+---
+
 ### Version 1.3.2
 **Release Date:** October 30, 2025
 
