@@ -68,14 +68,8 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         this.player = playerInventory.player;
         this.journeyData = player.getData(JourneyMode.JOURNEY_DATA);
 
-        // Add deposit slot (center top of screen)
-        this.addSlot(new Slot(depositSlot, 0, 80, 18) {
-            @Override
-            public void setChanged() {
-                super.setChanged();
-                JourneyModeMenu.this.slotsChanged(depositSlot);
-            }
-        });
+        // Add deposit slot (center top of screen) - don't auto-process on change
+        this.addSlot(new Slot(depositSlot, 0, 80, 18));
 
         // Add player inventory slots
         for (int row = 0; row < 3; ++row) {
@@ -95,6 +89,16 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         }
     }
     
+    /**
+     * Called when submit button is clicked
+     */
+    public void submitDeposit() {
+        if (player.level().isClientSide) {
+            // Client-side: send packet to server
+            PacketDistributor.sendToServer(new com.aryangpt007.journeymode.network.packets.SubmitDepositPacket());
+        }
+    }
+    
     private void syncDataToClient(ServerPlayer player) {
         PacketDistributor.sendToPlayer(player, new SyncJourneyDataPacket(
             journeyData.getAllCollectedCounts(),
@@ -105,36 +109,52 @@ public class JourneyModeMenu extends AbstractContainerMenu {
     @Override
     public void slotsChanged(Container container) {
         super.slotsChanged(container);
-        if (container == depositSlot && !player.level().isClientSide) {
-            ItemStack stack = depositSlot.getItem(0);
-            if (!stack.isEmpty()) {
-                boolean unlocked = journeyData.depositItem(
-                    stack.copy(), 
-                    player.level().getRecipeManager(),
-                    player.level().registryAccess()
+        // Don't auto-process items - only process on submit button click
+    }
+    
+    /**
+     * Process the deposit (called from server via packet)
+     */
+    public void processDeposit() {
+        if (player.level().isClientSide) return;
+        
+        ItemStack stack = depositSlot.getItem(0);
+        if (!stack.isEmpty()) {
+            // Check if already unlocked
+            if (journeyData.isUnlocked(stack.getItem())) {
+                player.displayClientMessage(
+                    Component.literal("§e" + stack.getHoverName().getString() + " is already unlocked!"),
+                    false
                 );
-                depositSlot.setItem(0, ItemStack.EMPTY);
-                
-                int threshold = journeyData.getThreshold(stack.getItem());
-                
-                if (unlocked) {
-                    player.displayClientMessage(
-                        JourneyMode.translatable("unlock_message", stack.getHoverName(), threshold),
-                        false
-                    );
-                } else {
-                    int progress = journeyData.getProgress(stack.getItem());
-                    int collected = journeyData.getCollectedCount(stack.getItem());
-                    player.displayClientMessage(
-                        JourneyMode.translatable("deposit_message", stack.getCount(), stack.getHoverName(), collected, threshold, progress),
-                        true // Action bar
-                    );
-                }
-                
-                // Sync updated data to client
-                if (player instanceof ServerPlayer serverPlayer) {
-                    syncDataToClient(serverPlayer);
-                }
+                return; // Don't consume the item
+            }
+            
+            boolean unlocked = journeyData.depositItem(
+                stack.copy(), 
+                player.level().getRecipeManager(),
+                player.level().registryAccess()
+            );
+            depositSlot.setItem(0, ItemStack.EMPTY);
+            
+            int threshold = journeyData.getThreshold(stack.getItem());
+            
+            if (unlocked) {
+                player.displayClientMessage(
+                    JourneyMode.translatable("unlock_message", stack.getHoverName(), threshold),
+                    false
+                );
+            } else {
+                int progress = journeyData.getProgress(stack.getItem());
+                int collected = journeyData.getCollectedCount(stack.getItem());
+                player.displayClientMessage(
+                    JourneyMode.translatable("deposit_message", stack.getCount(), stack.getHoverName(), collected, threshold, progress),
+                    true // Action bar
+                );
+            }
+            
+            // Sync updated data to client
+            if (player instanceof ServerPlayer serverPlayer) {
+                syncDataToClient(serverPlayer);
             }
         }
     }

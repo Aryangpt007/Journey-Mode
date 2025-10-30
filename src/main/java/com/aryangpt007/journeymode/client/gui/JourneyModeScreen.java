@@ -44,9 +44,9 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     @Override
     protected void init() {
         super.init();
-        // Move title to top center, above tabs
+        // Move title much higher to avoid overlap with tabs
         this.titleLabelX = (this.imageWidth - this.font.width(this.title)) / 2;
-        this.titleLabelY = -25; // Move title above the screen
+        this.titleLabelY = -30; // Move title higher above the tabs
         this.inventoryLabelY = this.imageHeight - 94; // Position inventory label properly
     }
 
@@ -126,17 +126,61 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     }
 
     private void renderDepositTab(GuiGraphics guiGraphics, int x, int y) {
+        JourneyDataAttachment data = this.menu.getJourneyData();
+        
         // Draw instruction text above deposit slot
         guiGraphics.drawString(this.font, "Place items to unlock:", x + 40, y + 6, 0x404040, false);
         
         // Deposit slot is rendered automatically by the container at y + 18
+        // Draw submit button (at x + 110, y + 18)
+        int buttonX = x + 110;
+        int buttonY = y + 18;
+        int buttonWidth = 50;
+        int buttonHeight = 16;
         
-        // Draw progress info below deposit slot
-        JourneyDataAttachment data = this.menu.getJourneyData();
-        int yPos = y + 42; // Below the deposit slot
+        // Check if there's an item in the deposit slot
+        boolean hasItem = this.menu.slots.get(0).hasItem();
         
-        guiGraphics.drawString(this.font, "Threshold: Dynamic per item", x + 8, yPos, 0x404040, false);
-        guiGraphics.drawString(this.font, "Unlocked: " + data.getUnlockedItems().size() + " items", x + 8, yPos + 12, 0x404040, false);
+        // Button background
+        int buttonColor = hasItem ? 0xFF4CAF50 : 0xFF808080; // Green if has item, gray otherwise
+        guiGraphics.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, buttonColor);
+        guiGraphics.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, 0xFF2E7D32);
+        
+        // Button text
+        String buttonText = "Submit";
+        int textX = buttonX + (buttonWidth - this.font.width(buttonText)) / 2;
+        int textY = buttonY + 4;
+        guiGraphics.drawString(this.font, buttonText, textX, textY, hasItem ? 0xFFFFFFFF : 0xFFA0A0A0, false);
+        
+        // Show item info if item is in slot
+        int infoY = y + 42;
+        if (hasItem) {
+            ItemStack slotItem = this.menu.slots.get(0).getItem();
+            if (!slotItem.isEmpty()) {
+                // Initialize calculator if needed
+                data.initializeCalculator(
+                    this.minecraft.level.getRecipeManager(),
+                    this.minecraft.level.registryAccess()
+                );
+                
+                int threshold = data.getThreshold(slotItem.getItem());
+                int collected = data.getCollectedCount(slotItem.getItem());
+                boolean alreadyUnlocked = data.isUnlocked(slotItem.getItem());
+                
+                if (alreadyUnlocked) {
+                    guiGraphics.drawString(this.font, "§a✓ Already Unlocked!", x + 8, infoY, 0x00FF00, false);
+                } else {
+                    guiGraphics.drawString(this.font, "Required: " + threshold + " items", x + 8, infoY, 0x404040, false);
+                    guiGraphics.drawString(this.font, "Collected: " + collected + "/" + threshold, x + 8, infoY + 12, 0x404040, false);
+                    
+                    int progress = data.getProgress(slotItem.getItem());
+                    guiGraphics.drawString(this.font, "Progress: " + progress + "%", x + 8, infoY + 24, 0x606060, false);
+                }
+            }
+        } else {
+            // General info when no item
+            guiGraphics.drawString(this.font, "Unlocked: " + data.getUnlockedItems().size() + " items", x + 8, infoY, 0x404040, false);
+        }
     }
 
     private void renderJourneyTab(GuiGraphics guiGraphics, int x, int y, int mouseX, int mouseY) {
@@ -227,6 +271,25 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             } else if (mouseX >= x + 80 && mouseX < x + 140) {
                 currentTab = Tab.JOURNEY;
                 return true;
+            }
+        }
+
+        // Handle submit button click in Deposit tab
+        if (currentTab == Tab.DEPOSIT && button == 0) {
+            int buttonX = x + 110;
+            int buttonY = y + 18;
+            int buttonWidth = 50;
+            int buttonHeight = 16;
+            
+            if (mouseX >= buttonX && mouseX < buttonX + buttonWidth &&
+                mouseY >= buttonY && mouseY < buttonY + buttonHeight) {
+                // Check if there's an item in deposit slot
+                if (this.menu.slots.get(0).hasItem()) {
+                    // Trigger submit via shift-click on slot (vanilla mechanic)
+                    // Or send a custom packet
+                    this.menu.submitDeposit();
+                    return true;
+                }
             }
         }
 
