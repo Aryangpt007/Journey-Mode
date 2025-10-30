@@ -51,12 +51,12 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         // Move title much higher to avoid overlap with tabs
         this.titleLabelX = (this.imageWidth - this.font.width(this.title)) / 2;
         this.titleLabelY = -30; // Move title higher above the tabs
-        this.inventoryLabelY = this.imageHeight - 94; // Position inventory label properly
+        this.inventoryLabelY = this.imageHeight - 80; // Position inventory label properly (adjusted for taller GUI)
         
-        // Create search box for Journey tab
+        // Create search box for Journey tab (positioned above inventory)
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
-        this.searchBox = new EditBox(this.font, x + 8, y + 72, 160, 12, Component.literal("Search"));
+        this.searchBox = new EditBox(this.font, x + 8, y + 86, 160, 12, Component.literal("Search"));
         this.searchBox.setMaxLength(50);
         this.searchBox.setBordered(true);
         this.searchBox.setVisible(false);
@@ -388,4 +388,18 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
+    
+    @Override
+    public void removed() {
+        super.removed();
+        // Return any items in deposit slot to player inventory when GUI closes
+        if (this.menu != null && this.minecraft != null && this.minecraft.player != null) {
+            ItemStack depositedItem = this.menu.slots.get(0).getItem();
+            if (!depositedItem.isEmpty()) {
+                this.menu.slots.get(0).set(ItemStack.EMPTY);
+                this.minecraft.player.getInventory().add(depositedItem);
+            }
+        }
+    }
 }
+

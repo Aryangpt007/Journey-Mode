@@ -95,6 +95,30 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📋 Changelog
 
+### Version 1.3.1
+**Release Date:** October 30, 2025
+
+#### Bug Fixes
+- 🔧 **Fixed GUI Layout Issues**:
+  - Moved inventory slots down by 14 pixels to match taller GUI (180px height)
+  - Fixed "Inventory" label overlapping with slots in Deposit tab
+  - Fixed search box overlapping with inventory slots in Journey tab
+  - Search box now positioned at y+86 (above inventory)
+  - Inventory label now at proper position (imageHeight - 80)
+
+- 🔧 **Fixed Item Loss on GUI Close**:
+  - Items left in deposit slot are now returned to player inventory when GUI closes
+  - Added `removed()` override to handle cleanup
+  - Prevents accidental item loss if you close GUI without submitting
+
+#### Technical Changes
+- Inventory slots moved from y=84/142 to y=98/156
+- Search box moved from y=72 to y=86
+- Inventory label Y position updated from -94 to -80
+- Added proper cleanup in screen `removed()` method
+
+---
+
 ### Version 1.3.0
 **Release Date:** October 30, 2025
 

@@ -71,16 +71,16 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         // Add deposit slot (center top of screen) - don't auto-process on change
         this.addSlot(new Slot(depositSlot, 0, 80, 18));
 
-        // Add player inventory slots
+        // Add player inventory slots (moved down to accommodate taller GUI)
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 9; ++col) {
-                this.addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+                this.addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 98 + row * 18));
             }
         }
 
-        // Add player hotbar slots
+        // Add player hotbar slots (moved down to accommodate taller GUI)
         for (int col = 0; col < 9; ++col) {
-            this.addSlot(new Slot(playerInventory, col, 8 + col * 18, 142));
+            this.addSlot(new Slot(playerInventory, col, 8 + col * 18, 156));
         }
         
         // Sync data to client when menu opens
