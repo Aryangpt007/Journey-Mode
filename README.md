@@ -97,6 +97,43 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📋 Changelog
 
+### Version 1.1.0
+**Release Date:** October 30, 2025
+
+#### Major Features
+- 🎯 **Dynamic Unlock Thresholds**: Unlock requirements now adapt to each item!
+  - **Stack size 1 items** (tools, armor, etc.): Require only **1 item**
+  - **Raw materials** (ores, wood, etc.): Require **full stack size** (64 for most, 16 for ender pearls)
+  - **Crafted items (Depth 1)**: Require **50% of stack size** (32 for most items)
+  - **Crafted items (Depth 2)**: Require **25% of stack size** (16 for most items)
+  - **Complex items (Depth 3+)**: Require only **1 item**
+- 🔍 **Recipe Depth Analysis**: Automatically calculates crafting complexity
+  - Depth 0: Raw materials with no recipe
+  - Depth 1: Items crafted from raw materials
+  - Depth 2+: Items requiring multiple crafting steps
+  - Handles cyclic recipes and multiple recipe paths
+
+#### Implementation Details
+- Added `RecipeDepthCalculator` class for analyzing recipe complexity
+- Caches recipe depths for performance
+- Detects and breaks recipe cycles
+- Finds minimum depth when multiple recipes exist
+- Dynamic threshold calculation per item
+
+#### UI Changes
+- Updated deposit tab to show "Dynamic per item" threshold
+- Improved unlock messages to show required count
+- Better progress messages showing current/needed amounts
+
+#### Examples
+- Diamond Pickaxe (stack 1): 1 required ✨
+- Iron Ore (raw, stack 64): 64 required 
+- Iron Ingot (depth 1, stack 64): 32 required
+- Iron Block (depth 2, stack 64): 16 required
+- Redstone Comparator (depth 3+, stack 64): 1 required ✨
+
+---
+
 ### Version 1.0.1
 **Release Date:** October 30, 2025
 

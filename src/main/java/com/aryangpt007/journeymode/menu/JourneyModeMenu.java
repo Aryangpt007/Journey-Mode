@@ -108,18 +108,25 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         if (container == depositSlot && !player.level().isClientSide) {
             ItemStack stack = depositSlot.getItem(0);
             if (!stack.isEmpty()) {
-                boolean unlocked = journeyData.depositItem(stack.copy());
+                boolean unlocked = journeyData.depositItem(
+                    stack.copy(), 
+                    player.level().getRecipeManager(),
+                    player.level().registryAccess()
+                );
                 depositSlot.setItem(0, ItemStack.EMPTY);
+                
+                int threshold = journeyData.getThreshold(stack.getItem());
                 
                 if (unlocked) {
                     player.displayClientMessage(
-                        JourneyMode.translatable("unlock_message", stack.getHoverName()),
+                        JourneyMode.translatable("unlock_message", stack.getHoverName(), threshold),
                         false
                     );
                 } else {
                     int progress = journeyData.getProgress(stack.getItem());
+                    int collected = journeyData.getCollectedCount(stack.getItem());
                     player.displayClientMessage(
-                        JourneyMode.translatable("deposit_message", stack.getCount(), stack.getHoverName(), progress),
+                        JourneyMode.translatable("deposit_message", stack.getCount(), stack.getHoverName(), collected, threshold, progress),
                         true // Action bar
                     );
                 }

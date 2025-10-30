@@ -135,7 +135,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         JourneyDataAttachment data = this.menu.getJourneyData();
         int yPos = y + 42; // Below the deposit slot
         
-        guiGraphics.drawString(this.font, "Threshold: " + JourneyDataAttachment.UNLOCK_THRESHOLD + " items", x + 8, yPos, 0x404040, false);
+        guiGraphics.drawString(this.font, "Threshold: Dynamic per item", x + 8, yPos, 0x404040, false);
         guiGraphics.drawString(this.font, "Unlocked: " + data.getUnlockedItems().size() + " items", x + 8, yPos + 12, 0x404040, false);
     }
 
@@ -145,7 +145,8 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
 
         if (unlockedItems.isEmpty()) {
             guiGraphics.drawString(this.font, "No items unlocked yet!", x + 30, y + 30, 0x404040, false);
-            guiGraphics.drawString(this.font, "Deposit " + JourneyDataAttachment.UNLOCK_THRESHOLD + " of an item", x + 20, y + 45, 0x606060, false);
+            guiGraphics.drawString(this.font, "Deposit items in the Deposit tab", x + 16, y + 45, 0x606060, false);
+            guiGraphics.drawString(this.font, "(Threshold varies by item)", x + 24, y + 57, 0x606060, false);
             return;
         }
 
