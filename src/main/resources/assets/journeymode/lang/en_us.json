@@ -3,5 +3,7 @@
   "journeymode.unlock_message": "§6%s§r is now unlocked! (Required %d items)",
   "journeymode.deposit_message": "+%d %s → %d/%d (%d%%)",
   "journeymode.tab.deposit": "Deposit",
-  "journeymode.tab.journey": "Journey"
+  "journeymode.tab.journey": "Journey",
+  "key.journeymode.open_menu": "Open Journey Mode Menu",
+  "key.categories.journeymode": "Journey Mode"
 }

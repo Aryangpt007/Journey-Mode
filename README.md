@@ -95,6 +95,32 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📋 Changelog
 
+### Version 1.3.4
+**Release Date:** October 30, 2025
+
+#### Major Feature
+- ⌨️ **Configurable Keybind**: Journey Mode menu key is now customizable!
+  - Default key: `J` (unchanged)
+  - Configurable in: Options → Controls → Key Binds → Journey Mode
+  - Can rebind to any key you prefer
+  - Appears in dedicated "Journey Mode" category in controls menu
+
+#### Technical Implementation
+- Added `KeyMapping` for proper Minecraft keybind integration
+- Registered keybind in `RegisterKeyMappingsEvent`
+- Replaced hardcoded `GLFW_KEY_J` with `KeyMapping.consumeClick()`
+- Added localization for keybind name and category
+- Keybind state is saved in Minecraft's options.txt
+
+#### User Experience
+- Navigate to Options → Controls → Key Binds
+- Scroll to "Journey Mode" category
+- Click on "Open Journey Mode Menu" binding
+- Press your desired key to rebind
+- Changes save automatically
+
+---
+
 ### Version 1.3.3
 **Release Date:** October 30, 2025
 
@@ -182,6 +208,36 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Type to filter items instantly
 - Scroll wheel works with filtered results
 - Item tooltips work correctly with search/sort
+
+---
+
+### Version 1.2.0
+**Release Date:** October 30, 2025
+
+#### Major UI/UX Improvements
+- 🔘 **Submit Button**: Items no longer auto-deposit - click "Submit" button to confirm
+  - Green button appears when item is in deposit slot
+  - Prevents accidental deposits
+  - Shows clear visual feedback
+- 📊 **Live Item Info**: When item is placed in deposit slot (before submitting):
+  - Shows required threshold for that specific item
+  - Shows current collected count vs. required
+  - Shows progress percentage
+  - Displays "Already Unlocked!" for unlocked items
+- 🚫 **Unlocked Item Protection**: Cannot deposit items that are already unlocked
+  - Shows green checkmark if item is already unlocked
+  - Prevents wasting items on already-unlocked entries
+- 🎯 **Better Title Positioning**: "Journey Mode" title moved higher to avoid tab overlap
+
+#### Bug Fixes
+- Fixed title overlapping with tabs
+- Items no longer disappear when placed in deposit slot
+- Clear visual feedback for all deposit states
+
+#### User Experience
+- Place item in slot → See requirements and progress → Click Submit → Item deposited
+- Much clearer what's needed for each item type
+- No more confusion about dynamic thresholds
 
 ---
 
