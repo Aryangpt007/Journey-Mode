@@ -88,14 +88,42 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Configurable unlock threshold
 - Custom GUI textures
-- **Item Search**: Search functionality in Journey tab to quickly find unlocked items
-- **Smart Sorting**: Items in Journey tab sorted by unlock time (most recent first)
 - Export/import of unlocked items
 - Statistics tracking
 
 ---
 
 ## 📋 Changelog
+
+### Version 1.3.0
+**Release Date:** October 30, 2025
+
+#### Major Features
+- 🔍 **Item Search**: Search box in Journey tab to quickly find unlocked items
+  - Real-time filtering as you type
+  - Case-insensitive search
+  - Matches item display names
+  - Shows "No items match search" when no results
+- 📊 **Smart Sorting**: Items automatically sorted by unlock time
+  - Most recently unlocked items appear first
+  - Easier to find your latest unlocks
+  - Combined with search for powerful item finding
+
+#### Technical Improvements
+- Added unlock timestamp tracking to `JourneyDataAttachment`
+  - Stores millisecond timestamp when each item is unlocked
+  - Persistent across game sessions via Codec serialization
+- Enhanced `SyncJourneyDataPacket` to sync timestamps
+- Added `getUnlockedItemsSorted()` method for timestamp-based sorting
+- Search box appears only in Journey tab (auto-hides in Deposit tab)
+
+#### User Experience
+- Search box positioned below item grid (bottom of Journey tab)
+- Type to filter items instantly
+- Scroll wheel works with filtered results
+- Item tooltips work correctly with search/sort
+
+---
 
 ### Version 1.2.0
 **Release Date:** October 30, 2025

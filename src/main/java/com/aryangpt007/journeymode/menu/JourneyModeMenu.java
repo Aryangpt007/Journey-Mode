@@ -102,7 +102,8 @@ public class JourneyModeMenu extends AbstractContainerMenu {
     private void syncDataToClient(ServerPlayer player) {
         PacketDistributor.sendToPlayer(player, new SyncJourneyDataPacket(
             journeyData.getAllCollectedCounts(),
-            journeyData.getUnlockedItems()
+            journeyData.getUnlockedItems(),
+            journeyData.getUnlockTimestamps()
         ));
     }
 

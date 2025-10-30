@@ -14,7 +14,7 @@ import java.util.*;
 /**
  * Packet to sync Journey Mode data from server to client
  */
-public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems) implements CustomPacketPayload {
+public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps) implements CustomPacketPayload {
     public static final Type<SyncJourneyDataPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(JourneyMode.MODID, "sync_journey_data"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, SyncJourneyDataPacket> STREAM_CODEC = StreamCodec.composite(
@@ -22,6 +22,8 @@ public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<St
         SyncJourneyDataPacket::collectedCounts,
         ByteBufCodecs.collection(HashSet::new, ByteBufCodecs.STRING_UTF8),
         packet -> packet.unlockedItems,
+        ByteBufCodecs.map(HashMap::new, ByteBufCodecs.STRING_UTF8, ByteBufCodecs.VAR_LONG),
+        SyncJourneyDataPacket::unlockTimestamps,
         SyncJourneyDataPacket::new
     );
 
@@ -35,7 +37,7 @@ public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<St
             if (context.player().level().isClientSide) {
                 var journeyData = context.player().getData(JourneyMode.JOURNEY_DATA);
                 // Update the client-side data with server data
-                journeyData.updateFromSync(packet.collectedCounts, packet.unlockedItems);
+                journeyData.updateFromSync(packet.collectedCounts, packet.unlockedItems, packet.unlockTimestamps);
             }
         });
     }

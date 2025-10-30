@@ -6,6 +6,7 @@ import com.aryangpt007.journeymode.menu.JourneyModeMenu;
 import com.aryangpt007.journeymode.network.packets.RequestItemPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -34,6 +35,9 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     private int scrollOffset = 0;
     private static final int ITEMS_PER_ROW = 9;
     private static final int VISIBLE_ROWS = 3;
+    
+    private EditBox searchBox;
+    private String searchQuery = "";
 
     public JourneyModeScreen(JourneyModeMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -48,6 +52,20 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         this.titleLabelX = (this.imageWidth - this.font.width(this.title)) / 2;
         this.titleLabelY = -30; // Move title higher above the tabs
         this.inventoryLabelY = this.imageHeight - 94; // Position inventory label properly
+        
+        // Create search box for Journey tab
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+        this.searchBox = new EditBox(this.font, x + 8, y + 72, 160, 12, Component.literal("Search"));
+        this.searchBox.setMaxLength(50);
+        this.searchBox.setBordered(true);
+        this.searchBox.setVisible(false);
+        this.searchBox.setTextColor(0xFFFFFF);
+        this.searchBox.setResponder(query -> {
+            this.searchQuery = query.toLowerCase();
+            this.scrollOffset = 0; // Reset scroll when search changes
+        });
+        this.addRenderableWidget(this.searchBox);
     }
 
     @Override
@@ -55,6 +73,11 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         this.renderTooltip(guiGraphics, mouseX, mouseY);
+        
+        // Update search box visibility based on current tab
+        if (this.searchBox != null) {
+            this.searchBox.setVisible(currentTab == Tab.JOURNEY);
+        }
     }
 
     @Override
@@ -185,12 +208,18 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
 
     private void renderJourneyTab(GuiGraphics guiGraphics, int x, int y, int mouseX, int mouseY) {
         JourneyDataAttachment data = this.menu.getJourneyData();
-        List<String> unlockedItems = new ArrayList<>(data.getUnlockedItems());
+        
+        // Get sorted and filtered items
+        List<String> unlockedItems = getFilteredAndSortedItems(data);
 
         if (unlockedItems.isEmpty()) {
-            guiGraphics.drawString(this.font, "No items unlocked yet!", x + 30, y + 30, 0x404040, false);
-            guiGraphics.drawString(this.font, "Deposit items in the Deposit tab", x + 16, y + 45, 0x606060, false);
-            guiGraphics.drawString(this.font, "(Threshold varies by item)", x + 24, y + 57, 0x606060, false);
+            if (searchQuery.isEmpty()) {
+                guiGraphics.drawString(this.font, "No items unlocked yet!", x + 30, y + 30, 0x404040, false);
+                guiGraphics.drawString(this.font, "Deposit items in the Deposit tab", x + 16, y + 45, 0x606060, false);
+                guiGraphics.drawString(this.font, "(Threshold varies by item)", x + 24, y + 57, 0x606060, false);
+            } else {
+                guiGraphics.drawString(this.font, "No items match search", x + 35, y + 30, 0x404040, false);
+            }
             return;
         }
 
@@ -224,6 +253,29 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             }
         }
     }
+    
+    /**
+     * Get unlocked items filtered by search query and sorted by unlock time (most recent first)
+     */
+    private List<String> getFilteredAndSortedItems(JourneyDataAttachment data) {
+        // Start with sorted items (most recent first)
+        List<String> items = data.getUnlockedItemsSorted();
+        
+        // Filter by search query if present
+        if (!searchQuery.isEmpty()) {
+            List<String> filtered = new ArrayList<>();
+            for (String itemId : items) {
+                Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+                String itemName = new ItemStack(item).getHoverName().getString().toLowerCase();
+                if (itemName.contains(searchQuery)) {
+                    filtered.add(itemId);
+                }
+            }
+            return filtered;
+        }
+        
+        return items;
+    }
 
     @Override
     protected void renderTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
@@ -231,7 +283,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         
         if (currentTab == Tab.JOURNEY) {
             JourneyDataAttachment data = this.menu.getJourneyData();
-            List<String> unlockedItems = new ArrayList<>(data.getUnlockedItems());
+            List<String> unlockedItems = getFilteredAndSortedItems(data);
             
             int x = (this.width - this.imageWidth) / 2;
             int y = (this.height - this.imageHeight) / 2;
@@ -296,7 +348,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         // Handle item clicks in Journey tab
         if (currentTab == Tab.JOURNEY && button == 0) { // Left click
             JourneyDataAttachment data = this.menu.getJourneyData();
-            List<String> unlockedItems = new ArrayList<>(data.getUnlockedItems());
+            List<String> unlockedItems = getFilteredAndSortedItems(data);
             
             int startIndex = scrollOffset * ITEMS_PER_ROW;
             int endIndex = Math.min(startIndex + (VISIBLE_ROWS * ITEMS_PER_ROW), unlockedItems.size());
@@ -327,7 +379,8 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (currentTab == Tab.JOURNEY) {
             JourneyDataAttachment data = this.menu.getJourneyData();
-            int totalItems = data.getUnlockedItems().size();
+            List<String> unlockedItems = getFilteredAndSortedItems(data);
+            int totalItems = unlockedItems.size();
             int maxScroll = Math.max(0, (totalItems - 1) / ITEMS_PER_ROW - VISIBLE_ROWS + 1);
             
             scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) scrollY));

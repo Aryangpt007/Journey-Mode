@@ -17,12 +17,14 @@ public class JourneyDataAttachment {
     public static final Codec<JourneyDataAttachment> CODEC = RecordCodecBuilder.create(instance ->
         instance.group(
             Codec.unboundedMap(Codec.STRING, Codec.INT).fieldOf("collected_counts").forGetter(d -> d.collectedCounts),
-            Codec.list(Codec.STRING).fieldOf("unlocked_items").forGetter(d -> new ArrayList<>(d.unlockedItems))
+            Codec.list(Codec.STRING).fieldOf("unlocked_items").forGetter(d -> new ArrayList<>(d.unlockedItems)),
+            Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("unlock_timestamps", new HashMap<>()).forGetter(d -> d.unlockTimestamps)
         ).apply(instance, JourneyDataAttachment::new)
     );
 
     private final Map<String, Integer> collectedCounts; // Item ID -> count collected
     private final Set<String> unlockedItems; // Items unlocked for infinite access
+    private final Map<String, Long> unlockTimestamps; // Item ID -> unlock timestamp (milliseconds)
 
     @Deprecated // Use dynamic threshold via RecipeDepthCalculator
     public static final int UNLOCK_THRESHOLD = 30; // Fallback value
@@ -32,11 +34,13 @@ public class JourneyDataAttachment {
     public JourneyDataAttachment() {
         this.collectedCounts = new HashMap<>();
         this.unlockedItems = new HashSet<>();
+        this.unlockTimestamps = new HashMap<>();
     }
 
-    private JourneyDataAttachment(Map<String, Integer> collectedCounts, List<String> unlockedItems) {
+    private JourneyDataAttachment(Map<String, Integer> collectedCounts, List<String> unlockedItems, Map<String, Long> unlockTimestamps) {
         this.collectedCounts = new HashMap<>(collectedCounts);
         this.unlockedItems = new HashSet<>(unlockedItems);
+        this.unlockTimestamps = new HashMap<>(unlockTimestamps);
     }
     
     /**
@@ -79,6 +83,7 @@ public class JourneyDataAttachment {
         // Check if we just reached the threshold
         if (currentCount < threshold && newCount >= threshold) {
             unlockedItems.add(itemId);
+            unlockTimestamps.put(itemId, System.currentTimeMillis());
             return true; // Item was just unlocked
         }
         return false;
@@ -106,6 +111,26 @@ public class JourneyDataAttachment {
     public Set<String> getUnlockedItems() {
         return new HashSet<>(unlockedItems);
     }
+    
+    /**
+     * Get unlocked items sorted by timestamp (most recent first)
+     */
+    public List<String> getUnlockedItemsSorted() {
+        List<String> sortedItems = new ArrayList<>(unlockedItems);
+        sortedItems.sort((a, b) -> {
+            long timeA = unlockTimestamps.getOrDefault(a, 0L);
+            long timeB = unlockTimestamps.getOrDefault(b, 0L);
+            return Long.compare(timeB, timeA); // Most recent first
+        });
+        return sortedItems;
+    }
+    
+    /**
+     * Get all unlock timestamps
+     */
+    public Map<String, Long> getUnlockTimestamps() {
+        return new HashMap<>(unlockTimestamps);
+    }
 
     /**
      * Get progress percentage for an item (0-100)
@@ -126,10 +151,12 @@ public class JourneyDataAttachment {
     /**
      * Update data from server sync packet
      */
-    public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked) {
+    public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps) {
         this.collectedCounts.clear();
         this.collectedCounts.putAll(counts);
         this.unlockedItems.clear();
         this.unlockedItems.addAll(unlocked);
+        this.unlockTimestamps.clear();
+        this.unlockTimestamps.putAll(timestamps);
     }
 }
