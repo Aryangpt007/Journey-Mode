@@ -97,6 +97,30 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📋 Changelog
 
+### Version 1.0.1
+**Release Date:** October 30, 2025
+
+#### Bug Fixes
+- 🐛 **Fixed GUI Rendering Issues**:
+  - Added proper slot outlines for all inventory slots (now visible with dark borders)
+  - Fixed text overlap - moved "Journey Mode" title above tabs
+  - Fixed deposit tab instruction text positioning
+  - Added proper borders and backgrounds for Journey tab item slots
+- 🔄 **Fixed Data Synchronization**:
+  - Unlocked item count now properly updates on client
+  - Added `SyncJourneyDataPacket` for server-to-client data sync
+  - Data syncs when menu opens and after each deposit
+  - Journey tab now correctly shows unlocked items count
+
+#### Technical Changes
+- Added `SyncJourneyDataPacket` for client-server data sync
+- Added `updateFromSync()` method to `JourneyDataAttachment`
+- Enhanced `renderBg()` to draw slot backgrounds with borders
+- Improved screen layout and text positioning
+- Updated network packet registration
+
+---
+
 ### Version 1.0.0 (Initial Release)
 **Release Date:** October 30, 2025
 

@@ -3,6 +3,7 @@ package com.aryangpt007.journeymode.network;
 import com.aryangpt007.journeymode.JourneyMode;
 import com.aryangpt007.journeymode.network.packets.OpenJourneyMenuPacket;
 import com.aryangpt007.journeymode.network.packets.RequestItemPacket;
+import com.aryangpt007.journeymode.network.packets.SyncJourneyDataPacket;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -28,6 +29,12 @@ public class NetworkHandler {
             RequestItemPacket.TYPE,
             RequestItemPacket.STREAM_CODEC,
             RequestItemPacket::handle
+        );
+        
+        registrar.playToClient(
+            SyncJourneyDataPacket.TYPE,
+            SyncJourneyDataPacket.STREAM_CODEC,
+            SyncJourneyDataPacket::handle
         );
     }
 }

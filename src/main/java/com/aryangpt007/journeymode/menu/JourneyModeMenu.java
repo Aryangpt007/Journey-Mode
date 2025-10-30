@@ -2,13 +2,16 @@ package com.aryangpt007.journeymode.menu;
 
 import com.aryangpt007.journeymode.JourneyMode;
 import com.aryangpt007.journeymode.data.JourneyDataAttachment;
+import com.aryangpt007.journeymode.network.packets.SyncJourneyDataPacket;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Menu for Journey Mode screen with deposit slot
@@ -85,6 +88,18 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         for (int col = 0; col < 9; ++col) {
             this.addSlot(new Slot(playerInventory, col, 8 + col * 18, 142));
         }
+        
+        // Sync data to client when menu opens
+        if (player instanceof ServerPlayer serverPlayer) {
+            syncDataToClient(serverPlayer);
+        }
+    }
+    
+    private void syncDataToClient(ServerPlayer player) {
+        PacketDistributor.sendToPlayer(player, new SyncJourneyDataPacket(
+            journeyData.getAllCollectedCounts(),
+            journeyData.getUnlockedItems()
+        ));
     }
 
     @Override
@@ -107,6 +122,11 @@ public class JourneyModeMenu extends AbstractContainerMenu {
                         JourneyMode.translatable("deposit_message", stack.getCount(), stack.getHoverName(), progress),
                         true // Action bar
                     );
+                }
+                
+                // Sync updated data to client
+                if (player instanceof ServerPlayer serverPlayer) {
+                    syncDataToClient(serverPlayer);
                 }
             }
         }

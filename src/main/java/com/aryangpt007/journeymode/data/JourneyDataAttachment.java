@@ -90,4 +90,14 @@ public class JourneyDataAttachment {
     public Map<String, Integer> getAllCollectedCounts() {
         return new HashMap<>(collectedCounts);
     }
+    
+    /**
+     * Update data from server sync packet
+     */
+    public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked) {
+        this.collectedCounts.clear();
+        this.collectedCounts.putAll(counts);
+        this.unlockedItems.clear();
+        this.unlockedItems.addAll(unlocked);
+    }
 }

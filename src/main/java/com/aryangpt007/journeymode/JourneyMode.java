@@ -52,6 +52,8 @@ public class JourneyMode {
         if (FMLEnvironment.dist == Dist.CLIENT) {
             modEventBus.addListener(ClientSetup::onClientSetup);
             modEventBus.addListener(ClientSetup::registerScreens);
+            modEventBus.addListener(com.aryangpt007.journeymode.client.KeyBindings::register);
+            NeoForge.EVENT_BUS.register(com.aryangpt007.journeymode.client.KeyBindings.ClientEvents.class);
         }
 
         LOGGER.info("Journey Mode loaded successfully!");

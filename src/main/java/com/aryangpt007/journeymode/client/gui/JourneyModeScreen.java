@@ -44,7 +44,10 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     @Override
     protected void init() {
         super.init();
+        // Move title to top center, above tabs
         this.titleLabelX = (this.imageWidth - this.font.width(this.title)) / 2;
+        this.titleLabelY = -25; // Move title above the screen
+        this.inventoryLabelY = this.imageHeight - 94; // Position inventory label properly
     }
 
     @Override
@@ -62,7 +65,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
 
-        // Draw background
+        // Draw main background
         guiGraphics.fill(x, y, x + this.imageWidth, y + this.imageHeight, 0xFFC6C6C6);
         guiGraphics.fill(x + 1, y + 1, x + this.imageWidth - 1, y + this.imageHeight - 1, 0xFF8B8B8B);
 
@@ -75,6 +78,43 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         } else {
             renderJourneyTab(guiGraphics, x, y, mouseX, mouseY);
         }
+        
+        // Draw inventory slot backgrounds
+        renderSlotBackgrounds(guiGraphics, x, y);
+    }
+    
+    private void renderSlotBackgrounds(GuiGraphics guiGraphics, int x, int y) {
+        // Draw deposit slot background if in deposit tab
+        if (currentTab == Tab.DEPOSIT) {
+            int slotX = x + 80;
+            int slotY = y + 18;
+            // Slot border (darker)
+            guiGraphics.fill(slotX - 1, slotY - 1, slotX + 17, slotY + 17, 0xFF373737);
+            // Slot background (lighter)
+            guiGraphics.fill(slotX, slotY, slotX + 16, slotY + 16, 0xFF8B8B8B);
+        }
+        
+        // Draw player inventory slot backgrounds
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 9; ++col) {
+                int slotX = x + 8 + col * 18;
+                int slotY = y + 84 + row * 18;
+                // Slot border
+                guiGraphics.fill(slotX - 1, slotY - 1, slotX + 17, slotY + 17, 0xFF373737);
+                // Slot background
+                guiGraphics.fill(slotX, slotY, slotX + 16, slotY + 16, 0xFF8B8B8B);
+            }
+        }
+        
+        // Draw hotbar slot backgrounds
+        for (int col = 0; col < 9; ++col) {
+            int slotX = x + 8 + col * 18;
+            int slotY = y + 142;
+            // Slot border
+            guiGraphics.fill(slotX - 1, slotY - 1, slotX + 17, slotY + 17, 0xFF373737);
+            // Slot background
+            guiGraphics.fill(slotX, slotY, slotX + 16, slotY + 16, 0xFF8B8B8B);
+        }
     }
 
     private void drawTab(GuiGraphics guiGraphics, int x, int y, String label, boolean selected) {
@@ -86,14 +126,14 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     }
 
     private void renderDepositTab(GuiGraphics guiGraphics, int x, int y) {
-        // Draw instruction text
-        guiGraphics.drawString(this.font, "Place items here to track:", x + 8, y + 6, 0x404040, false);
+        // Draw instruction text above deposit slot
+        guiGraphics.drawString(this.font, "Place items to unlock:", x + 40, y + 6, 0x404040, false);
         
-        // Deposit slot is rendered automatically by the container
+        // Deposit slot is rendered automatically by the container at y + 18
         
-        // Draw progress info
+        // Draw progress info below deposit slot
         JourneyDataAttachment data = this.menu.getJourneyData();
-        int yPos = y + 45;
+        int yPos = y + 42; // Below the deposit slot
         
         guiGraphics.drawString(this.font, "Threshold: " + JourneyDataAttachment.UNLOCK_THRESHOLD + " items", x + 8, yPos, 0x404040, false);
         guiGraphics.drawString(this.font, "Unlocked: " + data.getUnlockedItems().size() + " items", x + 8, yPos + 12, 0x404040, false);
@@ -124,14 +164,16 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             int itemX = x + 8 + col * 18;
             int itemY = y + 18 + row * 18;
 
+            // Draw item slot border (darker outline)
+            guiGraphics.fill(itemX - 1, itemY - 1, itemX + 17, itemY + 17, 0xFF373737);
             // Draw item slot background
-            guiGraphics.fill(itemX, itemY, itemX + 16, itemY + 16, 0xFF373737);
+            guiGraphics.fill(itemX, itemY, itemX + 16, itemY + 16, 0xFF8B8B8B);
             
             // Render item
             ItemStack stack = new ItemStack(item);
             guiGraphics.renderItem(stack, itemX, itemY);
             
-            // Check if hovering for tooltip
+            // Check if hovering for highlight
             if (mouseX >= itemX && mouseX < itemX + 16 && mouseY >= itemY && mouseY < itemY + 16) {
                 guiGraphics.fill(itemX, itemY, itemX + 16, itemY + 16, 0x80FFFFFF);
             }
