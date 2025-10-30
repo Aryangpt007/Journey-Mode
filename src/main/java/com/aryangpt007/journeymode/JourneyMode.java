@@ -1,6 +1,8 @@
 package com.aryangpt007.journeymode;
 
 import com.aryangpt007.journeymode.client.ClientSetup;
+import com.aryangpt007.journeymode.commands.JourneyModeCommand;
+import com.aryangpt007.journeymode.config.ConfigHandler;
 import com.aryangpt007.journeymode.data.JourneyDataAttachment;
 import com.aryangpt007.journeymode.events.JourneyModeEvents;
 import com.aryangpt007.journeymode.menu.JourneyModeMenu;
@@ -11,10 +13,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.MenuType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -35,8 +39,12 @@ public class JourneyMode {
     public static final DeferredHolder<AttachmentType<?>, AttachmentType<JourneyDataAttachment>> JOURNEY_DATA = 
         ATTACHMENTS.register("journey_data", () -> AttachmentType.builder(() -> new JourneyDataAttachment()).serialize(JourneyDataAttachment.CODEC).build());
 
-    public JourneyMode(IEventBus modEventBus) {
+    public JourneyMode(IEventBus modEventBus, ModContainer modContainer) {
         LOGGER.info("Journey Mode is loading...");
+
+        // Register configuration
+        ConfigHandler.register(modContainer);
+        modEventBus.addListener(ConfigHandler::onConfigLoad);
 
         // Register deferred registries
         MENUS.register(modEventBus);
@@ -47,6 +55,11 @@ public class JourneyMode {
 
         // Register events
         NeoForge.EVENT_BUS.register(new JourneyModeEvents());
+        
+        // Register commands
+        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> {
+            JourneyModeCommand.register(event.getDispatcher());
+        });
 
         // Client-side setup
         if (FMLEnvironment.dist == Dist.CLIENT) {

@@ -1,6 +1,8 @@
 package com.aryangpt007.journeymode.data;
 
+import com.aryangpt007.journeymode.config.ConfigHandler;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -12,6 +14,7 @@ import java.util.*;
 
 /**
  * Calculates unlock thresholds based on recipe depth and stack size
+ * Can be overridden by configuration
  */
 public class RecipeDepthCalculator {
     private final Map<Item, Integer> depthCache = new HashMap<>();
@@ -26,6 +29,7 @@ public class RecipeDepthCalculator {
 
     /**
      * Calculate the unlock threshold for an item based on its recipe depth and stack size
+     * Config overrides take priority over recipe-based calculation
      * 
      * Rules:
      * - Stack size 1: Always requires 1 item
@@ -35,6 +39,14 @@ public class RecipeDepthCalculator {
      * - Depth 3+: Requires 1 item
      */
     public int calculateThreshold(Item item) {
+        // Check for config override first
+        String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
+        Integer configOverride = ConfigHandler.getThresholdOverride(itemId);
+        if (configOverride != null) {
+            return Math.max(1, configOverride); // Ensure at least 1
+        }
+        
+        // Use recipe-based calculation
         int stackSize = item.getDefaultMaxStackSize();
         
         // Items that only stack to 1 always require just 1

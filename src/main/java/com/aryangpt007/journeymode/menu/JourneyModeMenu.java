@@ -1,8 +1,10 @@
 package com.aryangpt007.journeymode.menu;
 
 import com.aryangpt007.journeymode.JourneyMode;
+import com.aryangpt007.journeymode.config.ConfigHandler;
 import com.aryangpt007.journeymode.data.JourneyDataAttachment;
 import com.aryangpt007.journeymode.network.packets.SyncJourneyDataPacket;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -121,6 +123,16 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         
         ItemStack stack = depositSlot.getItem(0);
         if (!stack.isEmpty()) {
+            // Check if blacklisted
+            String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            if (ConfigHandler.isBlacklisted(itemId)) {
+                player.displayClientMessage(
+                    JourneyMode.translatable("blacklist_message", stack.getHoverName()),
+                    false
+                );
+                return; // Don't consume the item
+            }
+            
             // Check if already unlocked
             if (journeyData.isUnlocked(stack.getItem())) {
                 player.displayClientMessage(

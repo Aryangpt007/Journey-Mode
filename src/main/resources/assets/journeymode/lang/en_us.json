@@ -5,5 +5,13 @@
   "journeymode.tab.deposit": "Deposit",
   "journeymode.tab.journey": "Journey",
   "key.journeymode.open_menu": "Open Journey Mode Menu",
-  "key.categories.journeymode": "Journey Mode"
+  "key.categories.journeymode": "Journey Mode",
+  
+  "journeymode.command.enabled": "§aJourney Mode is now enabled!",
+  "journeymode.command.disabled": "§cJourney Mode is now disabled!",
+  "journeymode.command.status.enabled": "Journey Mode is currently §aenabled§r",
+  "journeymode.command.status.disabled": "Journey Mode is currently §cdisabled§r",
+  
+  "journeymode.blacklist_message": "§c%s is blacklisted and cannot be deposited!",
+  "journeymode.disabled_message": "§cJourney Mode is disabled. Use /journeymode on to enable it."
 }

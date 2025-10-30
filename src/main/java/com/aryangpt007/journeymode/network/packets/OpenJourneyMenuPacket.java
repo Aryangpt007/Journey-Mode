@@ -1,8 +1,10 @@
 package com.aryangpt007.journeymode.network.packets;
 
 import com.aryangpt007.journeymode.JourneyMode;
+import com.aryangpt007.journeymode.data.JourneyDataAttachment;
 import com.aryangpt007.journeymode.menu.JourneyModeMenu;
 import io.netty.buffer.ByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -26,6 +28,16 @@ public record OpenJourneyMenuPacket() implements CustomPacketPayload {
     public static void handle(OpenJourneyMenuPacket packet, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer serverPlayer) {
+                // Check if Journey Mode is enabled for this player
+                JourneyDataAttachment data = serverPlayer.getData(JourneyMode.JOURNEY_DATA);
+                if (data == null || !data.isEnabled()) {
+                    serverPlayer.displayClientMessage(
+                        JourneyMode.translatable("disabled_message"),
+                        false
+                    );
+                    return;
+                }
+                
                 serverPlayer.openMenu(new SimpleMenuProvider(
                     (containerId, playerInventory, player) -> new JourneyModeMenu(containerId, playerInventory),
                     JourneyMode.translatable("menu.title")

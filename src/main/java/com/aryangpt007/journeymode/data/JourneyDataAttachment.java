@@ -18,13 +18,15 @@ public class JourneyDataAttachment {
         instance.group(
             Codec.unboundedMap(Codec.STRING, Codec.INT).fieldOf("collected_counts").forGetter(d -> d.collectedCounts),
             Codec.list(Codec.STRING).fieldOf("unlocked_items").forGetter(d -> new ArrayList<>(d.unlockedItems)),
-            Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("unlock_timestamps", new HashMap<>()).forGetter(d -> d.unlockTimestamps)
+            Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("unlock_timestamps", new HashMap<>()).forGetter(d -> d.unlockTimestamps),
+            Codec.BOOL.optionalFieldOf("enabled", true).forGetter(d -> d.enabled)
         ).apply(instance, JourneyDataAttachment::new)
     );
 
     private final Map<String, Integer> collectedCounts; // Item ID -> count collected
     private final Set<String> unlockedItems; // Items unlocked for infinite access
     private final Map<String, Long> unlockTimestamps; // Item ID -> unlock timestamp (milliseconds)
+    private boolean enabled; // Whether Journey Mode is enabled for this player
 
     @Deprecated // Use dynamic threshold via RecipeDepthCalculator
     public static final int UNLOCK_THRESHOLD = 30; // Fallback value
@@ -35,12 +37,14 @@ public class JourneyDataAttachment {
         this.collectedCounts = new HashMap<>();
         this.unlockedItems = new HashSet<>();
         this.unlockTimestamps = new HashMap<>();
+        this.enabled = true; // Default to enabled
     }
 
-    private JourneyDataAttachment(Map<String, Integer> collectedCounts, List<String> unlockedItems, Map<String, Long> unlockTimestamps) {
+    private JourneyDataAttachment(Map<String, Integer> collectedCounts, List<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled) {
         this.collectedCounts = new HashMap<>(collectedCounts);
         this.unlockedItems = new HashSet<>(unlockedItems);
         this.unlockTimestamps = new HashMap<>(unlockTimestamps);
+        this.enabled = enabled;
     }
     
     /**
@@ -158,5 +162,19 @@ public class JourneyDataAttachment {
         this.unlockedItems.addAll(unlocked);
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(timestamps);
+    }
+    
+    /**
+     * Check if Journey Mode is enabled for this player
+     */
+    public boolean isEnabled() {
+        return enabled;
+    }
+    
+    /**
+     * Set whether Journey Mode is enabled for this player
+     */
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 }

@@ -53,3 +53,9 @@ src/generated/
 AI_CONTEXT.md
 *.tmp
 ~*
+
+# Upload automation scripts (contain API tokens)
+upload-curseforge.ps1
+upload-modrinth.ps1
+upload-all.ps1
+test-upload-config.ps1

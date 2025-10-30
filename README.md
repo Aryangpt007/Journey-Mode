@@ -84,16 +84,227 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - No configuration file yet for customizing the unlock threshold
 - GUI texture uses placeholder rendering (no custom texture PNG)
 
-## 🔮 Planned Features
+## �️ Development Roadmap
 
-- Configurable unlock threshold
-- Custom GUI textures
-- Export/import of unlocked items
-- Statistics tracking
+### Phase 1: Core Enhancement (Current - NeoForge 1.21.1)
+**Objective**: Enhance the existing NeoForge implementation with essential features
+
+#### Features
+- ✅ Journey Mode Toggle System
+  - Command: `/journeymode on|off`
+  - Per-player capability to enable/disable Journey Mode
+  - Prevents auto-access for all players
+  
+- ✅ Configuration System
+  - Config file for threshold overrides
+  - Item blacklist (prevent specific items from being unlockable)
+  - Keep RecipeDepthCalculator as smart default
+  - Allow modpack makers to customize per-item thresholds
+
+- ✅ Enhanced Data Management
+  - Improved death/respawn data persistence
+  - Player data migration tools
+
+#### Deliverables
+- `journeymode-common.toml` configuration file
+- `/journeymode` command implementation
+- Config-based item blacklist
+- Threshold override system
+
+---
+
+### Phase 2: Multi-Loader Architecture Setup
+**Objective**: Establish shared codebase structure for Forge, Fabric, and NeoForge
+
+#### Architecture
+- Common module for shared game logic
+- Loader-specific modules for platform APIs
+- Gradle multi-project setup with subprojects
+- Automated version management
+
+#### Structure
+```
+journey-mode/
+├── common/          # Shared game logic (90% of code)
+├── neoforge/        # NeoForge-specific code
+├── forge/           # Forge-specific code
+├── fabric/          # Fabric-specific code
+└── build.gradle     # Root build configuration
+```
+
+---
+
+### Phase 3: Multi-Version Support (Forge)
+**Objective**: Port to Forge for multiple Minecraft versions
+
+#### Target Versions
+- ⚠️ **Forge 1.12.2** - Legacy, uses old API patterns
+- ✅ **Forge 1.16.5** - Stable, widely used
+- ✅ **Forge 1.19.2** - Modern, good support
+- ✅ **Forge 1.20.1** - Recent stable
+- ⚠️ **Forge 1.21.1+** - Limited (Forge support ending, use NeoForge instead)
+
+**Note**: Forge support is ending for 1.21+. NeoForge is the recommended loader for 1.21.1+
+
+#### Implementation Strategy
+- Start with 1.20.1 (closest to current NeoForge)
+- Backport to 1.19.2
+- Backport to 1.16.5
+- Backport to 1.12.2 (requires significant API changes)
+
+---
+
+### Phase 4: Multi-Version Support (Fabric)
+**Objective**: Port to Fabric for multiple Minecraft versions
+
+#### Target Versions
+- ✅ **Fabric 1.16.5** - Available and stable
+- ✅ **Fabric 1.19.2** - Available and stable
+- ✅ **Fabric 1.20.1** - Available and stable
+- ✅ **Fabric 1.21.1+** - Available and actively supported
+
+**Note**: All target Fabric versions are available and well-supported
+
+#### Implementation Strategy
+- Start with 1.21.1 (leverage existing logic)
+- Backport to 1.20.1
+- Backport to 1.19.2
+- Backport to 1.16.5
+
+---
+
+### Phase 5: Multi-Version Support (NeoForge)
+**Objective**: Port to NeoForge for additional versions
+
+#### Target Versions
+- ✅ **NeoForge 1.20.1** - Available (NeoForge exists from 1.20.1+)
+- ✅ **NeoForge 1.21.1+** - Current implementation (already done)
+
+**Note**: NeoForge only exists for Minecraft 1.20.1 and newer
+
+#### Implementation Strategy
+- Backport current 1.21.1 implementation to 1.20.1
+- Minimal changes expected (NeoForge API is consistent)
+
+---
+
+### Phase 6: Polish & Release
+**Objective**: Finalize and release all versions
+
+#### Features
+- ✅ Custom GUI textures (replace placeholder rendering)
+- ✅ Export/import unlocked items
+- ✅ Statistics tracking (items unlocked, items deposited, etc.)
+- ✅ Sound effects for unlock events
+- ✅ Particle effects on deposit/unlock
+
+#### Platform Releases
+- CurseForge for all loaders/versions
+- Modrinth for all loaders/versions
+- GitHub Releases with organized file structure
+
+---
+
+## 📊 Version Support Matrix
+
+| Minecraft Version | Forge | Fabric | NeoForge | Status |
+|-------------------|-------|--------|----------|---------|
+| **1.12.2** | ✅ Planned | ❌ N/A | ❌ N/A | Legacy Support |
+| **1.16.5** | ✅ Planned | ✅ Planned | ❌ N/A | Wide Adoption |
+| **1.19.2** | ✅ Planned | ✅ Planned | ❌ N/A | Stable & Popular |
+| **1.20.1** | ✅ Planned | ✅ Planned | ✅ Planned | Recent Stable |
+| **1.21.1+** | ⚠️ Limited | ✅ Planned | ✅ **Current** | Modern (NeoForge recommended) |
+
+**Legend**:
+- ✅ Planned/Supported
+- ⚠️ Limited Support (Forge ending for 1.21+)
+- ❌ Not Available
+
+**Important Notes**:
+- **Forge 1.21.1+**: Forge support is ending for Minecraft 1.21+. While technically possible, NeoForge is the recommended loader for 1.21.1+ versions.
+- **NeoForge**: Only exists for Minecraft 1.20.1 and newer (forked from Forge in 2023)
+- **Fabric**: Available and actively supported for all listed versions
+- All loaders are available for the planned versions (1.12.2 Fabric doesn't exist, but that's expected)
+
+---
+
+## 🔮 Future Features (Post Multi-Loader)
+
+- Server-side configuration sync
+- Team/shared unlocks for multiplayer
+- Achievement system for milestones
+- API for other mods to integrate
 
 ---
 
 ## 📋 Changelog
+
+### Version 1.4.0
+**Release Date:** October 31, 2025
+
+#### Major Features - Phase 1 Complete
+- ✅ **Journey Mode Toggle System**
+  - Per-player enable/disable via `/journeymode on|off` command
+  - Default: Enabled for all players
+  - Disabled players cannot open GUI or deposit items
+  - Status check: `/journeymode` without arguments
+  - Toggle state persists across sessions
+
+- ⚙️ **Configuration System** (JSON-based like ProjectE)
+  - Config folder: `config/Journey Mode/`
+  - **blacklist.json**: Block specific items from being deposited
+    - Auto-generates with common examples (bedrock, barrier, command blocks)
+    - Add/remove item IDs as needed
+  - **custom_thresholds.json**: Custom unlock requirements per item
+    - Override recipe-based calculations
+    - Examples included (diamond, netherite, elytra)
+  - **journeymode-common.toml**: Main config (currently minimal)
+  - All configs hot-reload without server restart
+
+#### Technical Implementation
+- `ConfigHandler.java`: JSON file handling (following ProjectE pattern)
+- `JourneyDataAttachment`: Added `enabled` boolean field with Codec serialization
+- `JourneyModeCommand`: Brigadier command with on/off/status subcommands
+- `RecipeDepthCalculator`: Config override check before recipe calculation
+- `JourneyModeMenu`: Blacklist validation in `processDeposit()`
+- `OpenJourneyMenuPacket`: Toggle state check before opening GUI
+- All features properly localized in `en_us.json`
+
+#### Configuration Examples
+
+**blacklist.json**:
+```json
+{
+  "_comment": "Add item IDs to blacklist them from Journey Mode",
+  "blacklisted_items": [
+    "minecraft:bedrock",
+    "minecraft:barrier",
+    "minecraft:command_block",
+    "minecraft:structure_void"
+  ]
+}
+```
+
+**custom_thresholds.json**:
+```json
+{
+  "_comment": "Override unlock thresholds for specific items",
+  "thresholds": {
+    "minecraft:diamond": 10,
+    "minecraft:netherite_ingot": 5,
+    "minecraft:elytra": 1
+  }
+}
+```
+
+#### User Experience
+- Commands show colored feedback messages
+- Blacklisted items display clear error message
+- Disabled state prevents GUI opening with explanation
+- Config changes hot-reload without server restart
+- Recipe-based thresholds remain default behavior
+
+---
 
 ### Version 1.3.4
 **Release Date:** October 30, 2025
