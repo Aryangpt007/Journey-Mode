@@ -168,8 +168,17 @@ public class JourneyModeMenu extends AbstractContainerMenu {
             ItemStack slotStack = slot.getItem();
             itemstack = slotStack.copy();
 
-            // If clicking from player inventory, try to move to deposit slot
-            if (index >= 1 && index < this.slots.size()) {
+            // Slot 0 is deposit slot
+            // Slots 1-27 are player inventory
+            // Slots 28-36 are player hotbar
+            
+            if (index == 0) {
+                // Moving FROM deposit slot TO player inventory
+                if (!this.moveItemStackTo(slotStack, 1, this.slots.size(), true)) {
+                    return ItemStack.EMPTY;
+                }
+            } else {
+                // Moving FROM player inventory TO deposit slot
                 if (!this.moveItemStackTo(slotStack, 0, 1, false)) {
                     return ItemStack.EMPTY;
                 }

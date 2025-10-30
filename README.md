@@ -88,8 +88,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Configurable unlock threshold
 - Custom GUI textures
-- Item categories/filtering in Journey tab
-- Search functionality
+- **Item Search**: Search functionality in Journey tab to quickly find unlocked items
+- **Smart Sorting**: Items in Journey tab sorted by unlock time (most recent first)
 - Export/import of unlocked items
 - Statistics tracking
 

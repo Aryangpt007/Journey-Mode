@@ -37,7 +37,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
 
     public JourneyModeScreen(JourneyModeMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
-        this.imageHeight = 166;
+        this.imageHeight = 180; // Increased from 166 to accommodate more info
         this.imageWidth = 176;
     }
 
