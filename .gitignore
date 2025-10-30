@@ -48,5 +48,8 @@ src/generated/
 *.log
 *.bak
 *.swp
+
+# AI Context (for AI assistants only)
+AI_CONTEXT.md
 *.tmp
 ~*
