@@ -41,7 +41,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
 
     public JourneyModeScreen(JourneyModeMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
-        this.imageHeight = 180; // Increased from 166 to accommodate more info
+        this.imageHeight = 204; // Increased to accommodate search box and proper spacing
         this.imageWidth = 176;
     }
 
@@ -51,9 +51,9 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         // Move title much higher to avoid overlap with tabs
         this.titleLabelX = (this.imageWidth - this.font.width(this.title)) / 2;
         this.titleLabelY = -30; // Move title higher above the tabs
-        this.inventoryLabelY = this.imageHeight - 80; // Position inventory label properly (adjusted for taller GUI)
+        this.inventoryLabelY = this.imageHeight - 104; // Position inventory label with proper spacing
         
-        // Create search box for Journey tab (positioned above inventory)
+        // Create search box for Journey tab (positioned with proper spacing above inventory label)
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
         this.searchBox = new EditBox(this.font, x + 8, y + 86, 160, 12, Component.literal("Search"));

@@ -95,6 +95,30 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📋 Changelog
 
+### Version 1.3.2
+**Release Date:** October 30, 2025
+
+#### Major Improvements
+- 🎨 **Dynamic GUI Height**: Increased GUI height to 204 pixels for proper spacing
+  - Search box, inventory label, and all slots now have adequate room
+  - No more overlapping elements in any tab
+  - Clean, professional layout with breathing room
+
+#### Layout Changes
+- GUI height: 180px → 204px (24 pixels taller)
+- Inventory slots: y=110 (was y=98)
+- Hotbar slots: y=168 (was y=156)
+- Inventory label: imageHeight - 104 (was - 80)
+- Search box: y=86 (unchanged, now with proper spacing)
+
+#### Visual Improvements
+- Proper spacing between search box and inventory label
+- Inventory label no longer overlaps with slots
+- Search box no longer overlaps with inventory slots
+- Consistent spacing throughout the GUI
+
+---
+
 ### Version 1.3.1
 **Release Date:** October 30, 2025
 
