@@ -1,320 +1,638 @@
-# Journey Mode
+# Journey Mode# Journey Mode
 
-A Minecraft mod for NeoForge 1.21.1 that allows you to unlock unlimited access to items after collecting enough of them.
 
-## 🎮 Features
 
-- **Item Collection Tracking**: Deposit items to track your progress toward unlocking them
-- **Unlock Threshold**: Collect 30 of any item type to unlock unlimited access
+A Minecraft mod that allows you to unlock unlimited access to items after collecting enough of them. Available for **both Fabric and NeoForge** on **Minecraft 1.21 - 1.21.10**.A Minecraft mod for NeoForge 1.21.1 that allows you to unlock unlimited access to items after collecting enough of them.
+
+
+
+[![NeoForge](https://img.shields.io/badge/NeoForge-1.21.x-orange.svg)](https://neoforged.net/)## 🎮 Features
+
+[![Fabric](https://img.shields.io/badge/Fabric-1.21.x-blue.svg)](https://fabricmc.net/)
+
+[![License](https://img.shields.io/github/license/Aryangpt007/Journey-Mode)](LICENSE)- **Item Collection Tracking**: Deposit items to track your progress toward unlocking them
+
+[![Downloads](https://img.shields.io/github/downloads/Aryangpt007/Journey-Mode/total)](https://github.com/Aryangpt007/Journey-Mode/releases)- **Unlock Threshold**: Collect 30 of any item type to unlock unlimited access
+
 - **Journey Tab**: Access all unlocked items infinitely through a special inventory tab
-- **Persistent Storage**: Your unlocked items are saved with your player data
+
+## 🎮 What is Journey Mode?- **Persistent Storage**: Your unlocked items are saved with your player data
+
 - **Easy Access**: Press `J` to open the Journey Mode menu
+
+Journey Mode transforms your Minecraft experience by allowing you to **unlock items permanently** after collecting enough of them. Once unlocked, you can retrieve unlimited copies of that item whenever you need!
 
 ## 📦 How It Works
 
-1. **Deposit Items**: Open the Journey Mode menu (press `J`) and place items in the deposit slot
-2. **Track Progress**: Each item you deposit counts toward the unlock threshold (30 items)
-3. **Unlock Items**: Once you've deposited 30 of an item type, it becomes unlocked
-4. **Infinite Retrieval**: Switch to the Journey tab and click any unlocked item to retrieve it
+Perfect for:
+
+- 🏗️ **Builders** - Never run out of building materials1. **Deposit Items**: Open the Journey Mode menu (press `J`) and place items in the deposit slot
+
+- ⚗️ **Modpack Players** - Streamline repetitive crafting2. **Track Progress**: Each item you deposit counts toward the unlock threshold (30 items)
+
+- 🎯 **Completionists** - Track your item collection progress3. **Unlock Items**: Once you've deposited 30 of an item type, it becomes unlocked
+
+- 🎮 **Casual Players** - Reduce grinding after initial collection4. **Infinite Retrieval**: Switch to the Journey tab and click any unlocked item to retrieve it
+
    - Left-click: Get 1 item
-   - Shift + Left-click: Get 64 items
 
-## 🛠️ Installation
+## 📦 Features   - Shift + Left-click: Get 64 items
 
-### Requirements
-- Minecraft 1.21.1
-- NeoForge 21.1.72 or later
-- Java 21 or later
 
-### Steps
-1. Download the latest `journeymode-X.X.X.jar` from [Releases](https://github.com/Aryangpt007/Journey-Mode/releases)
-2. Place the JAR file in your `.minecraft/mods` folder
+
+### Core Gameplay## 🛠️ Installation
+
+- **Smart Unlock System**: Collect items to unlock infinite access
+
+  - Dynamic thresholds based on item complexity### Requirements
+
+  - Tools & armor: Only 1 required- Minecraft 1.21.1
+
+  - Raw materials: Full stack (64)- NeoForge 21.1.72 or later
+
+  - Crafted items: Scaled by recipe depth- Java 21 or later
+
+- **Dual-Tab GUI**: Clean interface with Deposit and Journey tabs
+
+- **Search & Filter**: Quickly find unlocked items in Journey tab### Steps
+
+- **Smart Sorting**: Items sorted by unlock time (newest first)1. Download the latest `journeymode-X.X.X.jar` from [Releases](https://github.com/Aryangpt007/Journey-Mode/releases)
+
+- **Progress Tracking**: See exactly how many more items you need2. Place the JAR file in your `.minecraft/mods` folder
+
 3. Launch Minecraft with the NeoForge 1.21.1 profile
 
-## 🔧 Development Setup
+### Player Control
 
-### Prerequisites
-- JDK 21 or later (JDK 22 recommended)
-- Git
+- **Toggle System**: Enable/disable Journey Mode per player## 🔧 Development Setup
+
+  - `/journeymode on` - Enable Journey Mode
+
+  - `/journeymode off` - Disable Journey Mode### Prerequisites
+
+  - `/journeymode status` - Check current status- JDK 21 or later (JDK 22 recommended)
+
+- **Keybind Support**: Press `J` to open the GUI (customizable)- Git
+
+- **Persistent Data**: Your progress saves across sessions
 
 ### Building from Source
 
-```powershell
-# Clone the repository
-git clone https://github.com/Aryangpt007/Journey-Mode.git
-cd Journey-Mode
+### Configuration
 
-# Build the mod
-.\gradlew.bat build
+- **Item Blacklist**: Prevent specific items from being unlockable```powershell
 
-# The built JAR will be in build/libs/
+- **Custom Thresholds**: Override unlock requirements per item# Clone the repository
+
+- **Hot-Reload**: Config changes apply without restartgit clone https://github.com/Aryangpt007/Journey-Mode.git
+
+- **JSON Format**: Easy to read and editcd Journey-Mode
+
+
+
+### Multi-Loader Support# Build the mod
+
+- ✅ **NeoForge 1.21.x** - Full support for 1.21 through 1.21.10.\gradlew.bat build
+
+- ✅ **Fabric 1.21.x** - Full support for 1.21 through 1.21.10
+
+- 🔄 **90% Shared Code** - Identical features and behavior across loaders# The built JAR will be in build/libs/
+
 ```
+
+## 🚀 Installation
 
 ### Running in Development
 
+### Requirements
+
 ```powershell
-# Run Minecraft client in development mode
-.\gradlew.bat runClient
 
-# Run dedicated server in development mode
+#### For NeoForge# Run Minecraft client in development mode
+
+- **Minecraft**: 1.21, 1.21.1, 1.21.2, 1.21.3, 1.21.4, 1.21.5, 1.21.6, 1.21.7, 1.21.8, 1.21.9, or 1.21.10.\gradlew.bat runClient
+
+- **NeoForge**: 21.1.72 or higher
+
+- **Java**: 21 or higher# Run dedicated server in development mode
+
 .\gradlew.bat runServer
-```
 
-## 📝 Configuration
+#### For Fabric```
 
-Currently, the unlock threshold is hardcoded to 30 items. Future versions may include a configuration file.
+- **Minecraft**: 1.21, 1.21.1, 1.21.2, 1.21.3, 1.21.4, 1.21.5, 1.21.6, 1.21.7, 1.21.8, 1.21.9, or 1.21.10
 
-## 🤝 Contributing
+- **Fabric Loader**: 0.16.5 or higher## 📝 Configuration
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+- **Fabric API**: 0.105.0+1.21.1 or higher (required dependency)
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+- **Java**: 21 or higherCurrently, the unlock threshold is hardcoded to 30 items. Future versions may include a configuration file.
+
+
+
+### Download## 🤝 Contributing
+
+
+
+**Choose your mod loader:**Contributions are welcome! Please feel free to submit issues or pull requests.
+
+
+
+- 🟠 [**NeoForge Version**](https://github.com/Aryangpt007/Journey-Mode/releases/latest) - `journeymode-1.6.0.jar`1. Fork the repository
+
+- 🔵 [**Fabric Version**](https://github.com/Aryangpt007/Journey-Mode/releases/tag/fabric-v1.0.0) - `journeymode_fab-1.0.0.jar`2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+
+**Also available on:**4. Push to the branch (`git push origin feature/amazing-feature`)
+
+- [CurseForge](https://www.curseforge.com/minecraft/mc-mods/journey-mode)5. Open a Pull Request
+
+- [Modrinth](https://modrinth.com/mod/journey-mode)
 
 ## 📄 License
 
+### Installation Steps
+
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🐛 Known Issues
+1. Download the appropriate JAR for your mod loader
 
-- Data persistence on player death/respawn needs enhancement
-- No configuration file yet for customizing the unlock threshold
+2. Place it in your `.minecraft/mods` folder## 🐛 Known Issues
+
+3. **(Fabric only)** Download and install [Fabric API](https://modrinth.com/mod/fabric-api)
+
+4. Launch Minecraft with the correct profile- Data persistence on player death/respawn needs enhancement
+
+5. Press `J` in-game to open Journey Mode!- No configuration file yet for customizing the unlock threshold
+
 - GUI texture uses placeholder rendering (no custom texture PNG)
+
+## 📖 How to Use
 
 ## �️ Development Roadmap
 
+### Getting Started
+
 ### Phase 1: Core Enhancement (Current - NeoForge 1.21.1)
-**Objective**: Enhance the existing NeoForge implementation with essential features
 
-#### Features
-- ✅ Journey Mode Toggle System
+1. **Enable Journey Mode** (default: enabled)**Objective**: Enhance the existing NeoForge implementation with essential features
+
+   ```
+
+   /journeymode on#### Features
+
+   ```- ✅ Journey Mode Toggle System
+
   - Command: `/journeymode on|off`
-  - Per-player capability to enable/disable Journey Mode
+
+2. **Open the GUI** - Press `J` (or your custom keybind)  - Per-player capability to enable/disable Journey Mode
+
   - Prevents auto-access for all players
-  
-- ✅ Configuration System
-  - Config file for threshold overrides
-  - Item blacklist (prevent specific items from being unlockable)
-  - Keep RecipeDepthCalculator as smart default
-  - Allow modpack makers to customize per-item thresholds
 
-- ✅ Enhanced Data Management
-  - Improved death/respawn data persistence
-  - Player data migration tools
+3. **Deposit Items**  
 
-#### Deliverables
-- `journeymode-common.toml` configuration file
+   - Switch to the **Deposit** tab- ✅ Configuration System
+
+   - Place items in the deposit slot  - Config file for threshold overrides
+
+   - See the required threshold and your progress  - Item blacklist (prevent specific items from being unlockable)
+
+   - Click **Submit** to deposit  - Keep RecipeDepthCalculator as smart default
+
+   - Repeat until unlocked!  - Allow modpack makers to customize per-item thresholds
+
+
+
+4. **Retrieve Items**- ✅ Enhanced Data Management
+
+   - Switch to the **Journey** tab  - Improved death/respawn data persistence
+
+   - See all your unlocked items  - Player data migration tools
+
+   - **Left-click**: Get 1 item
+
+   - **Shift + Left-click**: Get 64 items#### Deliverables
+
+   - Use the search box to filter items- `journeymode-common.toml` configuration file
+
 - `/journeymode` command implementation
-- Config-based item blacklist
+
+### Understanding Thresholds- Config-based item blacklist
+
 - Threshold override system
 
+Journey Mode uses **smart thresholds** based on item complexity:
+
 ---
 
-### Phase 2: Multi-Loader Architecture Setup
-**Objective**: Establish shared codebase structure for Forge, Fabric, and NeoForge
+| Item Type | Example | Threshold |
 
-#### Architecture
-- Common module for shared game logic
-- Loader-specific modules for platform APIs
-- Gradle multi-project setup with subprojects
+|-----------|---------|-----------|### Phase 2: Multi-Loader Architecture Setup
+
+| **Tools & Armor** | Diamond Pickaxe | 1 item |**Objective**: Establish shared codebase structure for Forge, Fabric, and NeoForge
+
+| **Complex Crafted** | Redstone Comparator | 1 item |
+
+| **Raw Materials** | Iron Ore, Logs | 64 items (full stack) |#### Architecture
+
+| **Crafted (Depth 1)** | Iron Ingot, Planks | 32 items (50%) |- Common module for shared game logic
+
+| **Crafted (Depth 2)** | Iron Block | 16 items (25%) |- Loader-specific modules for platform APIs
+
+| **Non-Stackable** | Bucket, Shears | 1 item |- Gradle multi-project setup with subprojects
+
 - Automated version management
 
+*Thresholds can be customized in config for individual items!*
+
 #### Structure
-```
+
+### Commands```
+
 journey-mode/
-├── common/          # Shared game logic (90% of code)
-├── neoforge/        # NeoForge-specific code
-├── forge/           # Forge-specific code
-├── fabric/          # Fabric-specific code
-└── build.gradle     # Root build configuration
-```
 
----
+```bash├── common/          # Shared game logic (90% of code)
 
-### Phase 3: Multi-Version Support (Forge)
+/journeymode on       # Enable Journey Mode for yourself├── neoforge/        # NeoForge-specific code
+
+/journeymode off      # Disable Journey Mode for yourself├── forge/           # Forge-specific code
+
+/journeymode status   # Check if Journey Mode is enabled├── fabric/          # Fabric-specific code
+
+/journeymode          # Same as status└── build.gradle     # Root build configuration
+
+``````
+
+
+
+## ⚙️ Configuration---
+
+
+
+Config files are located in `config/journeymode/` (or `config/Journey Mode/` for older versions)### Phase 3: Multi-Version Support (Forge)
+
 **Objective**: Port to Forge for multiple Minecraft versions
 
-#### Target Versions
+### blacklist.json
+
+Prevent specific items from being unlockable:#### Target Versions
+
 - ⚠️ **Forge 1.12.2** - Legacy, uses old API patterns
-- ✅ **Forge 1.16.5** - Stable, widely used
-- ✅ **Forge 1.19.2** - Modern, good support
-- ✅ **Forge 1.20.1** - Recent stable
-- ⚠️ **Forge 1.21.1+** - Limited (Forge support ending, use NeoForge instead)
 
-**Note**: Forge support is ending for 1.21+. NeoForge is the recommended loader for 1.21.1+
+```json- ✅ **Forge 1.16.5** - Stable, widely used
 
-#### Implementation Strategy
-- Start with 1.20.1 (closest to current NeoForge)
-- Backport to 1.19.2
-- Backport to 1.16.5
+{- ✅ **Forge 1.19.2** - Modern, good support
+
+  "_comment": "Add item IDs to blacklist them from Journey Mode",- ✅ **Forge 1.20.1** - Recent stable
+
+  "blacklisted_items": [- ⚠️ **Forge 1.21.1+** - Limited (Forge support ending, use NeoForge instead)
+
+    "minecraft:bedrock",
+
+    "minecraft:barrier",**Note**: Forge support is ending for 1.21+. NeoForge is the recommended loader for 1.21.1+
+
+    "minecraft:command_block",
+
+    "minecraft:structure_void"#### Implementation Strategy
+
+  ]- Start with 1.20.1 (closest to current NeoForge)
+
+}- Backport to 1.19.2
+
+```- Backport to 1.16.5
+
 - Backport to 1.12.2 (requires significant API changes)
 
----
+### custom_thresholds.json
 
-### Phase 4: Multi-Version Support (Fabric)
-**Objective**: Port to Fabric for multiple Minecraft versions
+Override unlock requirements for specific items:---
 
-#### Target Versions
-- ✅ **Fabric 1.16.5** - Available and stable
-- ✅ **Fabric 1.19.2** - Available and stable
-- ✅ **Fabric 1.20.1** - Available and stable
-- ✅ **Fabric 1.21.1+** - Available and actively supported
 
-**Note**: All target Fabric versions are available and well-supported
+
+```json### Phase 4: Multi-Version Support (Fabric)
+
+{**Objective**: Port to Fabric for multiple Minecraft versions
+
+  "_comment": "Override unlock thresholds for specific items",
+
+  "thresholds": {#### Target Versions
+
+    "minecraft:diamond": 10,- ✅ **Fabric 1.16.5** - Available and stable
+
+    "minecraft:netherite_ingot": 5,- ✅ **Fabric 1.19.2** - Available and stable
+
+    "minecraft:elytra": 1,- ✅ **Fabric 1.20.1** - Available and stable
+
+    "minecraft:enchanted_golden_apple": 3- ✅ **Fabric 1.21.1+** - Available and actively supported
+
+  }
+
+}**Note**: All target Fabric versions are available and well-supported
+
+```
 
 #### Implementation Strategy
-- Start with 1.21.1 (leverage existing logic)
+
+All config changes **hot-reload** - no server restart needed!- Start with 1.21.1 (leverage existing logic)
+
 - Backport to 1.20.1
-- Backport to 1.19.2
+
+## 🗺️ Roadmap- Backport to 1.19.2
+
 - Backport to 1.16.5
 
----
+### Current Status
 
-### Phase 5: Multi-Version Support (NeoForge)
-**Objective**: Port to NeoForge for additional versions
+- ✅ **Phase 1**: NeoForge 1.21.1 Core Features (Complete)---
 
-#### Target Versions
+- ✅ **Phase 2**: Multi-Loader Architecture (Complete)
+
+- ✅ **Phase 3**: NeoForge 1.21.x Full Family Support (Complete)### Phase 5: Multi-Version Support (NeoForge)
+
+- ✅ **Phase 4**: Fabric 1.21.x Implementation (Complete)**Objective**: Port to NeoForge for additional versions
+
+
+
+### Future Plans#### Target Versions
+
 - ✅ **NeoForge 1.20.1** - Available (NeoForge exists from 1.20.1+)
-- ✅ **NeoForge 1.21.1+** - Current implementation (already done)
 
-**Note**: NeoForge only exists for Minecraft 1.20.1 and newer
+#### Phase 5: Multi-Version Support- ✅ **NeoForge 1.21.1+** - Current implementation (already done)
 
-#### Implementation Strategy
+- 🔄 **Forge 1.20.1, 1.19.2, 1.16.5** - Backport to popular Forge versions
+
+- 🔄 **Fabric 1.20.1, 1.19.2, 1.16.5** - Backport to popular Fabric versions**Note**: NeoForge only exists for Minecraft 1.20.1 and newer
+
+- 🔄 **NeoForge 1.20.1** - Backport to NeoForge's first version
+
+- 🔄 **Forge 1.12.2** - Legacy support for long-term packs#### Implementation Strategy
+
 - Backport current 1.21.1 implementation to 1.20.1
-- Minimal changes expected (NeoForge API is consistent)
 
----
+#### Phase 6: Polish & Features- Minimal changes expected (NeoForge API is consistent)
 
-### Phase 6: Polish & Release
-**Objective**: Finalize and release all versions
+- ✨ Custom GUI textures (replace placeholder rendering)
+
+- ✨ Export/import unlocked items---
+
+- ✨ Statistics tracking dashboard
+
+- ✨ Sound effects for unlock events### Phase 6: Polish & Release
+
+- ✨ Particle effects on deposit/unlock**Objective**: Finalize and release all versions
+
+- ✨ Achievement system for milestones
 
 #### Features
-- ✅ Custom GUI textures (replace placeholder rendering)
-- ✅ Export/import unlocked items
-- ✅ Statistics tracking (items unlocked, items deposited, etc.)
-- ✅ Sound effects for unlock events
-- ✅ Particle effects on deposit/unlock
 
-#### Platform Releases
-- CurseForge for all loaders/versions
-- Modrinth for all loaders/versions
-- GitHub Releases with organized file structure
+#### Phase 7: Multiplayer Features- ✅ Custom GUI textures (replace placeholder rendering)
 
----
+- 👥 Team/shared unlocks- ✅ Export/import unlocked items
 
-## 📊 Version Support Matrix
+- 🔄 Server-side config sync- ✅ Statistics tracking (items unlocked, items deposited, etc.)
+
+- 📊 Leaderboards- ✅ Sound effects for unlock events
+
+- 🎁 Trade unlocked items- ✅ Particle effects on deposit/unlock
+
+
+
+#### Phase 8: API & Integration#### Platform Releases
+
+- 🔌 Public API for other mods- CurseForge for all loaders/versions
+
+- 🤝 EMI/JEI integration- Modrinth for all loaders/versions
+
+- 🛠️ Better modpack maker tools- GitHub Releases with organized file structure
+
+
+
+## 📋 Full Changelog---
+
+
+
+### Fabric v1.0.0 (October 31, 2025)## 📊 Version Support Matrix
+
+**First full Fabric release! 🎉**
 
 | Minecraft Version | Forge | Fabric | NeoForge | Status |
-|-------------------|-------|--------|----------|---------|
-| **1.12.2** | ✅ Planned | ❌ N/A | ❌ N/A | Legacy Support |
-| **1.16.5** | ✅ Planned | ✅ Planned | ❌ N/A | Wide Adoption |
-| **1.19.2** | ✅ Planned | ✅ Planned | ❌ N/A | Stable & Popular |
-| **1.20.1** | ✅ Planned | ✅ Planned | ✅ Planned | Recent Stable |
-| **1.21.1+** | ⚠️ Limited | ✅ Planned | ✅ **Current** | Modern (NeoForge recommended) |
 
-**Legend**:
-- ✅ Planned/Supported
-- ⚠️ Limited Support (Forge ending for 1.21+)
-- ❌ Not Available
+#### Features|-------------------|-------|--------|----------|---------|
+
+- ✅ Full menu and screen system with deposit and retrieval tabs| **1.12.2** | ✅ Planned | ❌ N/A | ❌ N/A | Legacy Support |
+
+- ✅ Complete networking (4 packets) using Fabric API| **1.16.5** | ✅ Planned | ✅ Planned | ❌ N/A | Wide Adoption |
+
+- ✅ Player data persistence with NBT storage| **1.19.2** | ✅ Planned | ✅ Planned | ❌ N/A | Stable & Popular |
+
+- ✅ Command system (`/journeymode on/off/status`)| **1.20.1** | ✅ Planned | ✅ Planned | ✅ Planned | Recent Stable |
+
+- ✅ Keybind support (J key)| **1.21.1+** | ⚠️ Limited | ✅ Planned | ✅ **Current** | Modern (NeoForge recommended) |
+
+- ✅ Platform abstraction implementation
+
+- ✅ Common module integration**Legend**:
+
+- ✅ Search and filter functionality- ✅ Planned/Supported
+
+- ✅ Smart item sorting by unlock time- ⚠️ Limited Support (Forge ending for 1.21+)
+
+- ✅ Dynamic threshold system- ❌ Not Available
+
+- ✅ Configuration support (blacklist, custom thresholds)
 
 **Important Notes**:
-- **Forge 1.21.1+**: Forge support is ending for Minecraft 1.21+. While technically possible, NeoForge is the recommended loader for 1.21.1+ versions.
+
+---- **Forge 1.21.1+**: Forge support is ending for Minecraft 1.21+. While technically possible, NeoForge is the recommended loader for 1.21.1+ versions.
+
 - **NeoForge**: Only exists for Minecraft 1.20.1 and newer (forked from Forge in 2023)
-- **Fabric**: Available and actively supported for all listed versions
-- All loaders are available for the planned versions (1.12.2 Fabric doesn't exist, but that's expected)
 
----
+### NeoForge v1.6.0 (October 31, 2025)- **Fabric**: Available and actively supported for all listed versions
 
-## 🔮 Future Features (Post Multi-Loader)
+**Extended 1.21.x family support**- All loaders are available for the planned versions (1.12.2 Fabric doesn't exist, but that's expected)
+
+
+
+#### Changes---
+
+- ✅ Extended Minecraft version support to entire 1.21.x family
+
+- ✅ Now supports: 1.21, 1.21.1, 1.21.2, 1.21.3, 1.21.4, 1.21.5, 1.21.6, 1.21.7, 1.21.8, 1.21.9, 1.21.10## 🔮 Future Features (Post Multi-Loader)
+
+- ✅ Updated version range from `[1.21.1,1.22)` to `[1.21,1.22)`
 
 - Server-side configuration sync
-- Team/shared unlocks for multiplayer
+
+---- Team/shared unlocks for multiplayer
+
 - Achievement system for milestones
-- API for other mods to integrate
+
+### NeoForge v1.5.0 (October 31, 2025)- API for other mods to integrate
+
+**Multi-Loader Architecture**
 
 ---
 
-## 📋 Changelog
+#### Major Changes
 
-### Version 1.5.0 - Multi-Loader Architecture
-**Release Date:** October 31, 2025
+- 🏗️ 90/10 Multi-Loader Architecture## 📋 Changelog
 
-#### 🏗️ Major Architectural Changes - Phase 2 Complete
-- ✅ **Multi-Loader Architecture Implementation**
-  - Established 90/10 split: Common module (platform-agnostic) + Platform modules (loader-specific)
-  - Created `common` module with pure Java code - zero loader dependencies
+- Created `common` module (platform-agnostic)
+
+- Created `neoforge-1.21.1` module (loader-specific)### Version 1.5.0 - Multi-Loader Architecture
+
+- Service Loader pattern for platform detection**Release Date:** October 31, 2025
+
+
+
+#### Bug Fixes#### 🏗️ Major Architectural Changes - Phase 2 Complete
+
+- 🔧 Fixed deposit slot visibility- ✅ **Multi-Loader Architecture Implementation**
+
+- 🔧 Fixed AttachmentType serialization  - Established 90/10 split: Common module (platform-agnostic) + Platform modules (loader-specific)
+
+- 🔧 Player data saves/loads correctly  - Created `common` module with pure Java code - zero loader dependencies
+
   - Migrated all core logic to common module (JourneyData, ConfigHandler, ThresholdCalculator, UnlockLogic)
-  - Created platform abstraction layer with `PlatformHelper` interface
+
+---  - Created platform abstraction layer with `PlatformHelper` interface
+
   - Implemented Service Loader pattern for automatic platform detection
-  - Set up Gradle multi-project structure with proper dependency management
+
+### NeoForge v1.4.0 (October 31, 2025)  - Set up Gradle multi-project structure with proper dependency management
+
+**Phase 1 Complete**
 
 #### 📁 New Project Structure
-```
-journey-mode/
-├── common/                    # 90% - Platform-agnostic code
-│   └── src/main/java/com/aryangpt007/journeymode/
-│       ├── core/             # JourneyData (pure Java data model)
-│       ├── logic/            # ConfigHandler, ThresholdCalculator, UnlockLogic
-│       └── platform/         # PlatformHelper interface, Platform service loader
-├── neoforge-1.21.1/          # 10% - NeoForge-specific wrappers
-│   └── src/main/java/com/aryangpt007/journeymode/
-│       ├── platform/neoforge/ # NeoForge platform implementation
-│       ├── menu/             # JourneyModeMenu (container)
-│       ├── client/gui/       # JourneyModeScreen (rendering)
-│       ├── network/packets/  # Network packet handlers
-│       ├── events/           # Event handlers
-│       └── commands/         # Command implementations
-└── build.gradle              # Root multi-project configuration
-```
 
-#### 🔧 Technical Implementation
+#### Features```
+
+- ✅ Journey Mode toggle (`/journeymode on/off/status`)journey-mode/
+
+- ⚙️ JSON configuration system├── common/                    # 90% - Platform-agnostic code
+
+- `blacklist.json` - Item blacklist│   └── src/main/java/com/aryangpt007/journeymode/
+
+- `custom_thresholds.json` - Custom thresholds│       ├── core/             # JourneyData (pure Java data model)
+
+- Hot-reload support│       ├── logic/            # ConfigHandler, ThresholdCalculator, UnlockLogic
+
+│       └── platform/         # PlatformHelper interface, Platform service loader
+
+---├── neoforge-1.21.1/          # 10% - NeoForge-specific wrappers
+
+│   └── src/main/java/com/aryangpt007/journeymode/
+
+### NeoForge v1.3.4 - v1.0.0│       ├── platform/neoforge/ # NeoForge platform implementation
+
+See [full version history](https://github.com/Aryangpt007/Journey-Mode/releases)│       ├── menu/             # JourneyModeMenu (container)
+
+│       ├── client/gui/       # JourneyModeScreen (rendering)
+
+## 🔧 For Developers│       ├── network/packets/  # Network packet handlers
+
+│       ├── events/           # Event handlers
+
+### Building from Source│       └── commands/         # Command implementations
+
+└── build.gradle              # Root multi-project configuration
+
+```bash```
+
+git clone https://github.com/Aryangpt007/Journey-Mode.git
+
+cd Journey-Mode#### 🔧 Technical Implementation
+
 - **Common Module**:
-  - `JourneyData.java`: Pure Java data model with JSON serialization (Gson)
-  - `ConfigHandler.java`: Config management (JSON file I/O)
+
+# Build NeoForge version  - `JourneyData.java`: Pure Java data model with JSON serialization (Gson)
+
+gradlew :neoforge-1.21.1:build  - `ConfigHandler.java`: Config management (JSON file I/O)
+
   - `ThresholdCalculator.java`: Recipe depth calculation logic
-  - `UnlockLogic.java`: Business logic for deposits and unlocks
-  - `PlatformHelper.java`: Platform abstraction interface
+
+# Build Fabric version  - `UnlockLogic.java`: Business logic for deposits and unlocks
+
+gradlew :fabric-1.21.x:build  - `PlatformHelper.java`: Platform abstraction interface
+
   - `Platform.java`: Service loader for runtime platform detection
-  
-- **NeoForge Platform Module**:
-  - `NeoForgeDataHandler.java`: AttachmentType wrapper with Codec serialization
+
+# Build both  
+
+gradlew build- **NeoForge Platform Module**:
+
+```  - `NeoForgeDataHandler.java`: AttachmentType wrapper with Codec serialization
+
   - `NeoForgePlatformImpl.java`: Platform implementation (data access, config paths)
-  - `NeoForgeConfigHandler.java`: Config initialization at mod startup
+
+### Project Structure  - `NeoForgeConfigHandler.java`: Config initialization at mod startup
+
   - All existing GUI, networking, events, and commands (unchanged functionality)
 
-#### 🐛 Bug Fixes
-- 🔧 **Fixed Deposit Slot Visibility**: Slot no longer appears in Journey tab
-  - Created `ConditionalSlot` class with `isActive()` override
-  - Slot is properly disabled when Journey tab is active
-  - Prevents both visual rendering and interaction (clicks, shift-clicks)
-  - Tab switching now enables/disables slot dynamically
-  
-- 🔧 **Fixed AttachmentType Serialization Error**: Player data now saves/loads correctly
+```
+
+journey-mode/#### 🐛 Bug Fixes
+
+├── common/                    # 90% - Shared code- 🔧 **Fixed Deposit Slot Visibility**: Slot no longer appears in Journey tab
+
+│   ├── core/                 # JourneyData model  - Created `ConditionalSlot` class with `isActive()` override
+
+│   ├── logic/                # ConfigHandler, Calculators  - Slot is properly disabled when Journey tab is active
+
+│   └── platform/             # PlatformHelper interface  - Prevents both visual rendering and interaction (clicks, shift-clicks)
+
+├── neoforge-1.21.1/          # 10% - NeoForge wrappers  - Tab switching now enables/disables slot dynamically
+
+└── fabric-1.21.x/            # 10% - Fabric wrappers  
+
+```- 🔧 **Fixed AttachmentType Serialization Error**: Player data now saves/loads correctly
+
   - Fixed Codec implementation using `Codec.STRING.xmap()` for bidirectional transformation
-  - Proper JSON string serialization/deserialization
+
+## 🤝 Contributing  - Proper JSON string serialization/deserialization
+
   - No more `AttachmentType.Builder$1.buildException` errors on player load
 
+Contributions welcome! Please submit issues or pull requests.
+
 #### 🎯 Benefits of New Architecture
-- **Easier Multi-Loader Support**: Common code can now be reused for Fabric and Forge ports
+
+## 📄 License- **Easier Multi-Loader Support**: Common code can now be reused for Fabric and Forge ports
+
 - **Cleaner Codebase**: Clear separation between game logic and platform-specific code
-- **Better Maintainability**: Bug fixes in common module automatically apply to all loaders
+
+MIT License - see [LICENSE](LICENSE) file for details.- **Better Maintainability**: Bug fixes in common module automatically apply to all loaders
+
 - **Future-Proof**: Adding new Minecraft versions requires only updating platform modules
 
-#### 📦 Deliverables
-- Multi-project Gradle build system
-- Common module JAR (reusable across loaders)
-- NeoForge 1.21.1 implementation JAR
-- Foundation ready for Phase 3 (Fabric/Forge ports)
+## 🔗 Links
 
-#### ⚙️ Migration Notes
+#### 📦 Deliverables
+
+- **GitHub**: [Aryangpt007/Journey-Mode](https://github.com/Aryangpt007/Journey-Mode)- Multi-project Gradle build system
+
+- **CurseForge**: [Journey Mode](https://www.curseforge.com/minecraft/mc-mods/journey-mode)- Common module JAR (reusable across loaders)
+
+- **Modrinth**: [Journey Mode](https://modrinth.com/mod/journey-mode)- NeoForge 1.21.1 implementation JAR
+
+- **Issues**: [Report a Bug](https://github.com/Aryangpt007/Journey-Mode/issues)- Foundation ready for Phase 3 (Fabric/Forge ports)
+
+
+
+## 👤 Author#### ⚙️ Migration Notes
+
 - All existing features from v1.4.0 preserved
-- No changes to user experience or gameplay
+
+**Aryangpt007** - [@Aryangpt007](https://github.com/Aryangpt007)- No changes to user experience or gameplay
+
 - Config files remain compatible
-- Player data automatically migrates
+
+---- Player data automatically migrates
+
 - Build output: `neoforge-1.21.1/build/libs/journeymode-1.5.0.jar`
+
+**Made with ❤️ for the Minecraft community**
 
 ---
 
