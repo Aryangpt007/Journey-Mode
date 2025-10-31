@@ -239,6 +239,85 @@ journey-mode/
 
 ## 📋 Changelog
 
+### Version 1.5.0 - Multi-Loader Architecture
+**Release Date:** October 31, 2025
+
+#### 🏗️ Major Architectural Changes - Phase 2 Complete
+- ✅ **Multi-Loader Architecture Implementation**
+  - Established 90/10 split: Common module (platform-agnostic) + Platform modules (loader-specific)
+  - Created `common` module with pure Java code - zero loader dependencies
+  - Migrated all core logic to common module (JourneyData, ConfigHandler, ThresholdCalculator, UnlockLogic)
+  - Created platform abstraction layer with `PlatformHelper` interface
+  - Implemented Service Loader pattern for automatic platform detection
+  - Set up Gradle multi-project structure with proper dependency management
+
+#### 📁 New Project Structure
+```
+journey-mode/
+├── common/                    # 90% - Platform-agnostic code
+│   └── src/main/java/com/aryangpt007/journeymode/
+│       ├── core/             # JourneyData (pure Java data model)
+│       ├── logic/            # ConfigHandler, ThresholdCalculator, UnlockLogic
+│       └── platform/         # PlatformHelper interface, Platform service loader
+├── neoforge-1.21.1/          # 10% - NeoForge-specific wrappers
+│   └── src/main/java/com/aryangpt007/journeymode/
+│       ├── platform/neoforge/ # NeoForge platform implementation
+│       ├── menu/             # JourneyModeMenu (container)
+│       ├── client/gui/       # JourneyModeScreen (rendering)
+│       ├── network/packets/  # Network packet handlers
+│       ├── events/           # Event handlers
+│       └── commands/         # Command implementations
+└── build.gradle              # Root multi-project configuration
+```
+
+#### 🔧 Technical Implementation
+- **Common Module**:
+  - `JourneyData.java`: Pure Java data model with JSON serialization (Gson)
+  - `ConfigHandler.java`: Config management (JSON file I/O)
+  - `ThresholdCalculator.java`: Recipe depth calculation logic
+  - `UnlockLogic.java`: Business logic for deposits and unlocks
+  - `PlatformHelper.java`: Platform abstraction interface
+  - `Platform.java`: Service loader for runtime platform detection
+  
+- **NeoForge Platform Module**:
+  - `NeoForgeDataHandler.java`: AttachmentType wrapper with Codec serialization
+  - `NeoForgePlatformImpl.java`: Platform implementation (data access, config paths)
+  - `NeoForgeConfigHandler.java`: Config initialization at mod startup
+  - All existing GUI, networking, events, and commands (unchanged functionality)
+
+#### 🐛 Bug Fixes
+- 🔧 **Fixed Deposit Slot Visibility**: Slot no longer appears in Journey tab
+  - Created `ConditionalSlot` class with `isActive()` override
+  - Slot is properly disabled when Journey tab is active
+  - Prevents both visual rendering and interaction (clicks, shift-clicks)
+  - Tab switching now enables/disables slot dynamically
+  
+- 🔧 **Fixed AttachmentType Serialization Error**: Player data now saves/loads correctly
+  - Fixed Codec implementation using `Codec.STRING.xmap()` for bidirectional transformation
+  - Proper JSON string serialization/deserialization
+  - No more `AttachmentType.Builder$1.buildException` errors on player load
+
+#### 🎯 Benefits of New Architecture
+- **Easier Multi-Loader Support**: Common code can now be reused for Fabric and Forge ports
+- **Cleaner Codebase**: Clear separation between game logic and platform-specific code
+- **Better Maintainability**: Bug fixes in common module automatically apply to all loaders
+- **Future-Proof**: Adding new Minecraft versions requires only updating platform modules
+
+#### 📦 Deliverables
+- Multi-project Gradle build system
+- Common module JAR (reusable across loaders)
+- NeoForge 1.21.1 implementation JAR
+- Foundation ready for Phase 3 (Fabric/Forge ports)
+
+#### ⚙️ Migration Notes
+- All existing features from v1.4.0 preserved
+- No changes to user experience or gameplay
+- Config files remain compatible
+- Player data automatically migrates
+- Build output: `neoforge-1.21.1/build/libs/journeymode-1.5.0.jar`
+
+---
+
 ### Version 1.4.0
 **Release Date:** October 31, 2025
 
