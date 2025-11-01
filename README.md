@@ -17,6 +17,20 @@ Journey Mode transforms your Minecraft experience by allowing you to **unlock it
 - 🎯 **Completionists** - Track your item collection progress
 - 🎮 **Casual Players** - Reduce grinding after initial collection
 
+## 📸 Screenshots
+
+### Deposit Tab - Empty
+![Empty Deposit Window](https://res.cloudinary.com/dx16xt23r/image/upload/v1761997883/IMG1_l41hi6.png)
+*The deposit tab where you begin your journey*
+
+### Deposit Tab - With Item
+![Deposit Window with Item](https://res.cloudinary.com/dx16xt23r/image/upload/v1761997882/IMG2_pvxj3n.png)
+*Place an item to see how many you need to unlock it*
+
+### Journey Tab - Unlocked Items
+![Journey Tab with Unlocked Items](https://res.cloudinary.com/dx16xt23r/image/upload/v1761997882/IMG3_dguymq.png)
+*Access all your unlocked items with infinite retrieval*
+
 ## ✨ Features
 
 ### Core Gameplay
@@ -52,9 +66,19 @@ Journey Mode transforms your Minecraft experience by allowing you to **unlock it
 ## 📦 How It Works
 
 1. **Deposit Items**: Open the Journey Mode menu (press `J`) and place items in the deposit slot
-2. **Track Progress**: Each item you deposit counts toward the unlock threshold (30 items)
+   
+   ![Empty Deposit Window](https://res.cloudinary.com/dx16xt23r/image/upload/v1761997883/IMG1_l41hi6.png)
+
+2. **Track Progress**: Each item you deposit counts toward the unlock threshold
+   
+   ![Deposit Window with Progress](https://res.cloudinary.com/dx16xt23r/image/upload/v1761997882/IMG2_pvxj3n.png)
+
 3. **Unlock Items**: Once you've deposited enough of an item type, it becomes unlocked
+
 4. **Infinite Retrieval**: Switch to the Journey tab and click any unlocked item to retrieve it
+   
+   ![Journey Tab](https://res.cloudinary.com/dx16xt23r/image/upload/v1761997882/IMG3_dguymq.png)
+   
    - Left-click: Get 1 item
    - Shift + Left-click: Get 64 items
 
