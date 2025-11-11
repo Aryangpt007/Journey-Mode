@@ -10,7 +10,6 @@ displayName="${mod_name}"
 displayURL="https://github.com/Aryangpt007/Journey-Mode"
 authors="${mod_authors}"
 description='''${mod_description}'''
-logoFile="logo.png"
 
 [[dependencies.journeymode]]
     modId="neoforge"

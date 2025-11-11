@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${mod_version}",
+  "name": "${mod_name}",
+  "description": "${mod_description}",
+  "authors": [
+    "${mod_authors}"
+  ],
+  "contact": {
+    "homepage": "https://github.com/Aryangpt007/Journey-Mode",
+    "sources": "https://github.com/Aryangpt007/Journey-Mode",
+    "issues": "https://github.com/Aryangpt007/Journey-Mode/issues"
+  },
+  "license": "${mod_license}",
+  "icon": "assets/journeymode/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.aryangpt007.journeymode.JourneyModeFabric"
+    ],
+    "client": [
+      "com.aryangpt007.journeymode.client.JourneyModeClientFabric"
+    ]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": ">=1.21"
+  },
+  "suggests": {}
+}
