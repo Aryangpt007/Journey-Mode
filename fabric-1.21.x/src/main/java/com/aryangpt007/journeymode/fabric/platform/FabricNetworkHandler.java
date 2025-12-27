@@ -1,7 +1,6 @@
 package com.aryangpt007.journeymode.fabric.platform;
 
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 
 /**
  * Placeholder for Fabric network handler.

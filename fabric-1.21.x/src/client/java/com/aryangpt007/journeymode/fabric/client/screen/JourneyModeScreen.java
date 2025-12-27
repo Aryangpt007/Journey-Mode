@@ -4,6 +4,7 @@ import com.aryangpt007.journeymode.fabric.JourneyModeFabric;
 import com.aryangpt007.journeymode.core.JourneyData;
 import com.aryangpt007.journeymode.fabric.menu.JourneyModeMenu;
 import com.aryangpt007.journeymode.fabric.network.packets.RequestItemPacket;
+import com.aryangpt007.journeymode.fabric.network.packets.SubmitDepositPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
@@ -345,7 +346,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                 if (this.menu.slots.get(0).hasItem()) {
                     // Trigger submit via shift-click on slot (vanilla mechanic)
                     // Or send a custom packet
-                    this.menu.submitDeposit();
+                    ClientPlayNetworking.send(new SubmitDepositPacket());
                     return true;
                 }
             }

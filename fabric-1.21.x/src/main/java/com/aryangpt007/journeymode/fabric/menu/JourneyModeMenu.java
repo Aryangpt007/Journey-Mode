@@ -4,9 +4,7 @@ import com.aryangpt007.journeymode.fabric.JourneyModeFabric;
 import com.aryangpt007.journeymode.core.JourneyData;
 import com.aryangpt007.journeymode.logic.ConfigHandler;
 import com.aryangpt007.journeymode.fabric.platform.FabricDataHandler;
-import com.aryangpt007.journeymode.fabric.network.packets.SubmitDepositPacket;
 import com.aryangpt007.journeymode.fabric.network.packets.SyncJourneyDataPacket;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -107,16 +105,6 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         // Sync data to client when menu opens
         if (player instanceof ServerPlayer serverPlayer) {
             syncDataToClient(serverPlayer);
-        }
-    }
-    
-    /**
-     * Called when submit button is clicked
-     */
-    public void submitDeposit() {
-        if (player.level().isClientSide) {
-            // Client-side: send packet to server
-            ClientPlayNetworking.send(new SubmitDepositPacket());
         }
     }
     
