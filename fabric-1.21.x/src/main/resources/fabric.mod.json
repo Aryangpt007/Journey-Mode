@@ -4,7 +4,7 @@
   "version": "1.6.1",
   "name": "Journey Mode",
   "description": "Unlock unlimited access to items after collecting enough of them",
-  "authors": ["Aryangpt007", "Aqua"],
+  "authors": ["Aryangpt007"],
   "license": "MIT",
   "environment": "*",
   "icon": "assets/journeymode/icon.png",
