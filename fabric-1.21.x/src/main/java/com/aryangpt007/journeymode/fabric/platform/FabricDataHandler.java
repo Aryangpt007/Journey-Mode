@@ -2,7 +2,6 @@ package com.aryangpt007.journeymode.fabric.platform;
 
 import com.aryangpt007.journeymode.core.JourneyData;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.HashMap;
