@@ -1,7 +1,10 @@
 package com.aryangpt007.journeymode.data;
 
 import com.mojang.serialization.Codec;
-import com.mojang.serialization.codecs.RecordCodecBuilder;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
@@ -14,13 +17,17 @@ import java.util.*;
  * Stores player's Journey Mode data - tracked items and unlocked items for infinite access
  */
 public class JourneyDataAttachment {
-    public static final Codec<JourneyDataAttachment> CODEC = RecordCodecBuilder.create(instance ->
-        instance.group(
-            Codec.unboundedMap(Codec.STRING, Codec.INT).fieldOf("collected_counts").forGetter(d -> d.collectedCounts),
-            Codec.list(Codec.STRING).fieldOf("unlocked_items").forGetter(d -> new ArrayList<>(d.unlockedItems)),
-            Codec.unboundedMap(Codec.STRING, Codec.LONG).optionalFieldOf("unlock_timestamps", new HashMap<>()).forGetter(d -> d.unlockTimestamps),
-            Codec.BOOL.optionalFieldOf("enabled", true).forGetter(d -> d.enabled)
-        ).apply(instance, JourneyDataAttachment::new)
+    private static final Gson GSON = new Gson();
+
+    public static final Codec<JourneyDataAttachment> CODEC = Codec.STRING.xmap(
+        jsonString -> {
+            try {
+                return fromJsonString(jsonString);
+            } catch (Exception e) {
+                return new JourneyDataAttachment();
+            }
+        },
+        attachment -> attachment.toJsonString()
     );
 
     private final Map<String, Integer> collectedCounts; // Item ID -> count collected
@@ -40,11 +47,72 @@ public class JourneyDataAttachment {
         this.enabled = true; // Default to enabled
     }
 
-    private JourneyDataAttachment(Map<String, Integer> collectedCounts, List<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled) {
+    private JourneyDataAttachment(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled) {
         this.collectedCounts = new HashMap<>(collectedCounts);
         this.unlockedItems = new HashSet<>(unlockedItems);
         this.unlockTimestamps = new HashMap<>(unlockTimestamps);
         this.enabled = enabled;
+    }
+
+    /**
+     * Serialize to JSON string
+     */
+    public String toJsonString() {
+        JsonObject json = new JsonObject();
+        
+        JsonObject countsJson = new JsonObject();
+        collectedCounts.forEach(countsJson::addProperty);
+        json.add("collected_counts", countsJson);
+        
+        JsonArray unlockedJson = new JsonArray();
+        unlockedItems.forEach(unlockedJson::add);
+        json.add("unlocked_items", unlockedJson);
+        
+        JsonObject timestampsJson = new JsonObject();
+        unlockTimestamps.forEach(timestampsJson::addProperty);
+        json.add("unlock_timestamps", timestampsJson);
+        
+        json.addProperty("enabled", enabled);
+        
+        return GSON.toJson(json);
+    }
+
+    /**
+     * Deserialize from JSON string
+     */
+    public static JourneyDataAttachment fromJsonString(String jsonString) {
+        JourneyDataAttachment attachment = new JourneyDataAttachment();
+        try {
+            JsonObject json = JsonParser.parseString(jsonString).getAsJsonObject();
+            
+            if (json.has("collected_counts")) {
+                JsonObject countsJson = json.getAsJsonObject("collected_counts");
+                countsJson.entrySet().forEach(entry -> 
+                    attachment.collectedCounts.put(entry.getKey(), entry.getValue().getAsInt())
+                );
+            }
+            
+            if (json.has("unlocked_items")) {
+                JsonArray unlockedJson = json.getAsJsonArray("unlocked_items");
+                unlockedJson.forEach(element -> 
+                    attachment.unlockedItems.add(element.getAsString())
+                );
+            }
+            
+            if (json.has("unlock_timestamps")) {
+                JsonObject timestampsJson = json.getAsJsonObject("unlock_timestamps");
+                timestampsJson.entrySet().forEach(entry -> 
+                    attachment.unlockTimestamps.put(entry.getKey(), entry.getValue().getAsLong())
+                );
+            }
+            
+            if (json.has("enabled")) {
+                attachment.enabled = json.get("enabled").getAsBoolean();
+            }
+        } catch (Exception e) {
+            // Keep default empty attachment
+        }
+        return attachment;
     }
     
     /**

@@ -319,9 +319,11 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         if (mouseY >= y - 20 && mouseY < y) {
             if (mouseX >= x + 10 && mouseX < x + 70) {
                 currentTab = Tab.DEPOSIT;
+                this.menu.setDepositSlotEnabled(true);
                 return true;
             } else if (mouseX >= x + 80 && mouseX < x + 140) {
                 currentTab = Tab.JOURNEY;
+                this.menu.setDepositSlotEnabled(false);
                 return true;
             }
         }
@@ -392,14 +394,17 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     @Override
     public void removed() {
         super.removed();
-        // Return any items in deposit slot to player inventory when GUI closes
-        if (this.menu != null && this.minecraft != null && this.minecraft.player != null) {
-            ItemStack depositedItem = this.menu.slots.get(0).getItem();
-            if (!depositedItem.isEmpty()) {
-                this.menu.slots.get(0).set(ItemStack.EMPTY);
-                this.minecraft.player.getInventory().add(depositedItem);
-            }
+        // The server-side menu will handle returning items via removed() method
+        // No need to do anything client-side
+    }
+    
+    @Override
+    protected void renderSlot(GuiGraphics guiGraphics, net.minecraft.world.inventory.Slot slot) {
+        // Only render the deposit slot (slot 0) when in deposit tab
+        if (slot.index == 0 && currentTab != Tab.DEPOSIT) {
+            return; // Skip rendering deposit slot in Journey tab
         }
+        super.renderSlot(guiGraphics, slot);
     }
 }
 

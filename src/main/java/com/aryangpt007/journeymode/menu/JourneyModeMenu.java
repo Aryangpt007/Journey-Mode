@@ -21,6 +21,22 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public class JourneyModeMenu extends AbstractContainerMenu {
     private final Player player;
     private final JourneyDataAttachment journeyData;
+    private boolean depositSlotEnabled = true;
+
+    // Custom slot that can be disabled
+    private static class ConditionalSlot extends Slot {
+        private final JourneyModeMenu menu;
+
+        public ConditionalSlot(JourneyModeMenu menu, Container container, int slot, int x, int y) {
+            super(container, slot, x, y);
+            this.menu = menu;
+        }
+
+        @Override
+        public boolean isActive() {
+            return menu.depositSlotEnabled;
+        }
+    }
 
     // Simple single-slot inventory for depositing items
     private final Container depositSlot = new Container() {
@@ -71,7 +87,7 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         this.journeyData = player.getData(JourneyMode.JOURNEY_DATA);
 
         // Add deposit slot (center top of screen) - don't auto-process on change
-        this.addSlot(new Slot(depositSlot, 0, 80, 18));
+        this.addSlot(new ConditionalSlot(this, depositSlot, 0, 80, 18));
 
         // Add player inventory slots (positioned with proper spacing for taller GUI)
         for (int row = 0; row < 3; ++row) {
@@ -212,7 +228,27 @@ public class JourneyModeMenu extends AbstractContainerMenu {
         return true;
     }
 
+    @Override
+    public void removed(Player player) {
+        super.removed(player);
+        // Return items from deposit slot to player when menu closes
+        if (!player.level().isClientSide) {
+            ItemStack depositedItem = this.depositSlot.getItem(0);
+            if (!depositedItem.isEmpty()) {
+                player.getInventory().placeItemBackInInventory(depositedItem);
+                this.depositSlot.setItem(0, ItemStack.EMPTY);
+            }
+        }
+    }
+
     public JourneyDataAttachment getJourneyData() {
         return journeyData;
+    }
+
+    /**
+     * Enable or disable the deposit slot (called from client screen when tab changes)
+     */
+    public void setDepositSlotEnabled(boolean enabled) {
+        this.depositSlotEnabled = enabled;
     }
 }
