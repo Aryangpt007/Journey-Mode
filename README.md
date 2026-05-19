@@ -40,7 +40,7 @@ Journey Mode transforms your Minecraft experience by allowing you to **unlock it
     *   Raw materials (ores, logs, dirt): Full stack (64).
     *   Crafted items (Planks, blocks): Scaled by recipe depth (50% or 25% stack size).
     *   Complex crafted items: Only 1 required.
-*   **Safe Saved Data Persistence**: Progress and unlocks are persisted **natively inside standard level NBT attachments**, completely avoiding fragile external JSON player data files, ensuring 100% data security and server portability.
+*   **Global Profile Portability & Safety**: Unlocks are persisted globally inside a centralized `journeymode_unlocks.json` profile in the root Minecraft folder, combined with fast in-memory attachment tracking. This Terraria-style research architecture allows player unlocks to automatically carry over across new singleplayer worlds or server instances, while completely insulating hard-earned progress from world corruption, server rollbacks, or modpack updates.
 *   **Dual-Tab GUI**: Beautiful custom layout featuring separate Deposit and Journey tabs with integrated inventory labels.
 *   **Real-Time Search & Filtering**: Locate items instantly via a case-insensitive search bar in the Journey tab.
 *   **Smart Sorting**: Items are automatically sorted with your most recently unlocked items displayed first.
@@ -252,7 +252,7 @@ journey-mode/                  # Root NeoForge 1.21.1 Project
 #### 🚀 Complete Mod Reconstruction & Porting
 * **Experimental Recovery & Revamp:** Previous experimental builds of both NeoForge and Fabric were broken due to the introduction of a complex multi-module architecture. We have completely revamped and reconstructed both loader projects back from the **`1.4.0`** codebase, which was the last verified stable build before introducing multi-module setups.
 * **100% Bug-Free Native JARs:** Both the Fabric 1.21.1 and NeoForge 1.21.1 mods are now compiled natively and work perfectly without any runtime bugs or crashes.
-* **Native NBT Saved Data Persistence:** User player data is no longer saved in an external JSON file. Progress and unlocks are persisted natively inside standard level NBT attachments, resolving server portability and synchronization issues.
+* **Global Profile Syncing & Redundancy:** Re-integrated and polished the global `journeymode_unlocks.json` save handler. In-game operations leverage modern attachments (NeoForge) and static tracking maps (Fabric) for lag-free in-memory lookups, while all progress dynamically saves to the central JSON file. This dual architecture ensures unlocks automatically carry over to new worlds (like Terraria characters) and remains 100% immune to world corruption or modpack update wipes.
 * **Fabric 1.21.1 Native Port:** Fully implemented the Fabric version inside the `Fabric/` directory with 100% feature-parity.
 * **Enforced Gradle Mappings Isolation:** Re-configured Gradle scripts to run official Mojang mappings (`mappings loom.officialMojangMappings()`) natively alongside Fabric Loader `0.19.2`, ensuring perfect compile-time type-safety.
 * **Safe Container Mixins:** Ported screen mixins (`HandledScreenMixin.java`) to inject cleanly on top of `AbstractContainerScreen` in the Mojmap environment.
