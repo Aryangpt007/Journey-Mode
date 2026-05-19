@@ -1,7 +1,6 @@
 package com.aryangpt007.journeymode.network.packets;
 
 import com.aryangpt007.journeymode.JourneyMode;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;

@@ -239,6 +239,49 @@ journey-mode/
 
 ## 📋 Changelog
 
+### Version 1.5.0N
+**Release Date:** May 19, 2026
+
+> [!IMPORTANT]
+> **Tested Platform:** Minecraft 1.21.1 (NeoForge 21.1.72) only. 
+
+#### Major Physical Side-Safety & Code Polish
+- 🛡️ **Physical Side-Safety Fixes:** Nested `ClientKeyHandler` inside `ClientSetup.java` (a client-only class) and removed all client-side imports (`Minecraft`, `ClientTickEvent`, GLFW, etc.) from `JourneyModeEvents.java` (a common class loaded on the dedicated server). This guarantees **zero startup crashes or class-loading errors on dedicated servers**.
+- 🧹 **Unused Import Cleanups:** Removed dead `Minecraft` client class references from the common `SyncJourneyDataPacket.java`.
+- 🗑️ **Redundant File Deletion:** Removed the obsolete and unused `KeyBindings.java` file to clean the codebase.
+
+#### Real-Time Global Save Portability & Sync
+- 💾 **Global Unlocks Portability:** Created `GlobalDataHandler.java` to read and write player unlocks to a central `journeymode_unlocks.json` file in the base Minecraft installation directory (`FMLPaths.GAMEDIR`).
+- 🔄 **Real-Time World Portability:** Unlocks are dynamically keyed by player UUIDs. Moving or sharing `journeymode_unlocks.json` enables carrying forward unlocks across completely different worlds, servers, or modpack instances.
+- 🔑 **Real-Time Action Sync:** 
+  - **Login Sync:** Automatically loads a player's global saves on joining a world via the `PlayerLoggedInEvent` listener.
+  - **Dimension & Death Sync:** Added a robust `PlayerEvent.Clone` handler that copies player attachment data across dimensions or respawns via the new `copyFrom()` helper and syncs to the client.
+  - **Real-Time Writes:** Saves the player's updated unlocks instantly to the global JSON file whenever an item is deposited or Journey Mode status is command-toggled.
+
+#### Journey Mode Reset Command
+- 🧹 **Reset Command:** Implemented a new command `/journeymode reset` to instantly wipe a player's progress and unlocks.
+- ⚡ **Real-Time Reset Sync:** Wipes the attachment data, saves the empty state to `journeymode_unlocks.json`, and updates the client screen instantaneously.
+
+---
+
+### Version 1.4.1N
+**Release Date:** May 19, 2026
+
+> [!IMPORTANT]
+> **Tested Platform:** Minecraft 1.21.1 (NeoForge 21.1.72) only.
+
+#### Journey Tab Dumping & Deletion Mechanics
+- 🗑️ **Shift-Click Dump:** Shift-clicking items in player inventory while viewing the Journey tab instantly deletes the stack if that item has already been unlocked in their Journey catalog.
+- 🫳 **Drag-and-Drop Grid Deletion:** Dragging an item stack from inventory and left-clicking it directly on its matching unlocked icon in the Journey grid deletes the carried cursor stack immediately.
+- 🌐 **Menu Tab Syncing:** Added `SyncTabPacket` and `DeleteCarriedPacket` to track the player's active tab and process deletes securely on the server-side.
+
+#### Critical Bug Fixes (v1.4.0 Baseline Resolution)
+- 🚫 **Slot Visibility & Clicks blocked:** Deactivated the deposit slot and hid its rendering in the Journey tab client interface via `ConditionalSlot` and `renderSlot` override filters.
+- 🛡️ **Item-Loss Prevention on Close:** Relocated the deposit slot cleanup code to the server-side menu `removed()` container method, preventing client packet bypasses.
+- 💥 **Attachment Serialization Crash Resolved:** Switched the capability codec serialization from mojang's record codebuilder to flat GSON-based `Codec.STRING.xmap(...)` flat serialization.
+
+---
+
 ### Version 1.4.0
 **Release Date:** October 31, 2025
 
