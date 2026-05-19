@@ -10,8 +10,4 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
 }
 
-rootProject.name = 'journey-mode'
-
-// Multi-loader architecture modules
-include 'common'
-include 'neoforge-1.21.1'
+rootProject.name = 'journeymode'

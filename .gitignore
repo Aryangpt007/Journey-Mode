@@ -51,8 +51,6 @@ src/generated/
 
 # AI Context (for AI assistants only)
 AI_CONTEXT.md
-AI_CONTEXT_V2.md
-AI_CONTEXT_V3.md
 *.tmp
 ~*
 
@@ -61,5 +59,6 @@ upload-curseforge.ps1
 upload-modrinth.ps1
 upload-all.ps1
 test-upload-config.ps1
-upload-curseforge-fabric.ps1
-upload-modrinth-fabric.ps1
+
+# Built distributions
+libs_dist/
