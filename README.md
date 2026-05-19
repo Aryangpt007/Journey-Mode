@@ -371,19 +371,19 @@ See [full version history](https://github.com/Aryangpt007/Journey-Mode/releases)
 
 ## 🗺️ Development Roadmap
 
-### Phase 1: Core Enhancements (1.21.1) — 🟢 Completed
+### Milestone 1: Core Enhancements (1.21.1) — 🟢 Completed
 *   **Per-Player Toggles:** Brigadier-style `/journeymode on|off|status` commands.
 *   **Recipe Depth Calculator:** Smart thresholds generated dynamically based on crafting complexity.
 *   **Hot-Reloadable Configuration:** Custom overrides via `blacklist.json` and `custom_thresholds.json` under `config/Journey Mode/`.
 *   **Crash-Proof Core:** Standardized side-safe client-server handlers ensuring zero dedicated server startup crashes.
 
-### Phase 2: Polish & Aesthetics — 🟡 In Progress
+### Milestone 2: Polish & Aesthetics — 🟡 In Progress
 *   🎨 **Custom GUI Textures:** Replace default container panels with beautiful, immersive custom artwork.
 *   🔊 **Auditory Feedback:** Satisfying custom sound effects on successful items deposit and unlock events.
 *   ✨ **Visual Sparks:** Bursting particle effects around the player when new items are added to their infinite library.
 *   📊 **Statistics Tracking:** In-game interface or command tracking total items deposited, category statistics, and unlocks.
 
-### Phase 3: Multi-Version Support (Forge & Fabric) — 📅 Planned
+### Milestone 3: Multi-Version Support (Forge & Fabric) — 📅 Planned
 Targeting stable and popular legacy and modern modding environments:
 *   ✅ **Minecraft 1.21.1 (NeoForge & Fabric)** — *Current Stable Release*
 *   📅 **Minecraft 1.20.1 (Forge, Fabric, NeoForge)**
@@ -391,7 +391,7 @@ Targeting stable and popular legacy and modern modding environments:
 *   📅 **Minecraft 1.16.5 (Forge & Fabric)**
 *   📅 **Minecraft 1.12.2 (Forge)**
 
-### Phase 4: Future Features & Multiplayer Integrations — 🚀 Planned
+### Milestone 4: Future Features & Multiplayer Integrations — 🚀 Planned
 *   👥 **Shared Team Unlocks:** Co-op progress syncing allowing server factions or build teams to share researched items.
 *   🔄 **Server Config Syncing:** Host-side configurations, custom thresholds, and blacklist updates synced automatically to clients.
 *   🏆 **Advancement Milestones:** In-game Minecraft achievements for unlocking large categories of items (e.g. Master Miner, Farmer, Armorer).
