@@ -182,9 +182,10 @@ public class JourneyModeMenu extends AbstractContainerMenu {
                 );
             }
             
-            // Sync updated data to client
+            // Sync updated data to client & save to global file in real-time
             if (player instanceof ServerPlayer serverPlayer) {
                 syncDataToClient(serverPlayer);
+                com.aryangpt007.journeymode.data.GlobalDataHandler.savePlayerUnlocks(serverPlayer, journeyData);
             }
         }
     }

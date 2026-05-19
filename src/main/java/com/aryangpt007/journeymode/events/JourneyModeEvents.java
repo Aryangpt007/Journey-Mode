@@ -19,16 +19,20 @@ import org.lwjgl.glfw.GLFW;
 public class JourneyModeEvents {
 
     @SubscribeEvent
+    public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.aryangpt007.journeymode.data.GlobalDataHandler.loadPlayerUnlocks(player);
+        }
+    }
+
+    @SubscribeEvent
     public void onPlayerClone(PlayerEvent.Clone event) {
-        // Copy Journey Mode data when player respawns or returns from End
-        if (event.isWasDeath() || !event.getEntity().level().isClientSide) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer newPlayer) {
             var oldData = event.getOriginal().getData(JourneyMode.JOURNEY_DATA);
-            var newData = event.getEntity().getData(JourneyMode.JOURNEY_DATA);
-            
-            // Copy unlocked items and counts
-            for (var entry : oldData.getAllCollectedCounts().entrySet()) {
-                // We need to manually copy since attachments create new instances
-                // This is a simplified approach - in production you'd reconstruct the attachment
+            var newData = newPlayer.getData(JourneyMode.JOURNEY_DATA);
+            if (oldData != null && newData != null) {
+                newData.copyFrom(oldData);
+                com.aryangpt007.journeymode.data.GlobalDataHandler.syncToClient(newPlayer, newData);
             }
         }
     }

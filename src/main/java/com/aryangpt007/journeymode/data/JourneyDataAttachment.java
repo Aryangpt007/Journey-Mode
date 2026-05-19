@@ -245,4 +245,26 @@ public class JourneyDataAttachment {
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
+
+    /**
+     * Copy all data from another attachment instance
+     */
+    public void copyFrom(JourneyDataAttachment other) {
+        this.collectedCounts.clear();
+        this.collectedCounts.putAll(other.collectedCounts);
+        this.unlockedItems.clear();
+        this.unlockedItems.addAll(other.unlockedItems);
+        this.unlockTimestamps.clear();
+        this.unlockTimestamps.putAll(other.unlockTimestamps);
+        this.enabled = other.enabled;
+    }
+
+    /**
+     * Clear all progress/unlocks but keep enabled status
+     */
+    public void reset() {
+        this.collectedCounts.clear();
+        this.unlockedItems.clear();
+        this.unlockTimestamps.clear();
+    }
 }
