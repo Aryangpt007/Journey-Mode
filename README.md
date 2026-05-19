@@ -65,6 +65,46 @@ Journey Mode transforms your Minecraft experience by allowing you to **unlock it
     *   `custom_thresholds.json` - Override recipe-based calculations with custom thresholds for specific items.
 *   **No Restart Required**: Config edits apply dynamically in-game without restarting the client or server.
 
+### Global Profile & Save Portability
+
+*   **Terraria-Style Research:** Journey Mode features a global save profile that keeps your unlocks persistent across completely different worlds. If you start a brand-new singleplayer world or join a new server, your hard-earned unlocks carry over automatically!
+*   **Where to Find it:** All player progress is written to a centralized file named `journeymode_unlocks.json` located directly in the root directory of your Minecraft installation (or server root folder):
+    ```
+    .minecraft/
+    ├── journeymode_unlocks.json     <-- Global Player Unlocks File
+    ├── config/
+    │   └── Journey Mode/
+    └── saves/
+    ```
+*   **How to Move & Migrate Data:**
+    *   **World Portability / Backups:** Storing unlocks outside of individual world folders means you can safely update, delete, or reset worlds without ever losing your catalog progress.
+    *   **Sharing Unlocks:** To share your research history with a friend, copy the `journeymode_unlocks.json` file to their Minecraft root directory.
+    *   **Server Migrations:** If you are a server operator moving to a new host, simply copy this file to the root of the new server directory to preserve all players' unlocks.
+*   **Wiping Progress:** If you ever want a 100% fresh start, simply run the `/journeymode reset` command in-game, which wipes your UUID profile entry inside this file.
+
+#### 📄 Example Profile Schema (`journeymode_unlocks.json`)
+
+The file is organized dynamically as a JSON dictionary mapped by player UUIDs, ensuring compatibility and data insulation in multiplayer:
+
+```json
+{
+  "4042cfd6-0c6a-4d2b-aa90-b1ffbc018c64": {
+    "collected_counts": {
+      "minecraft:diamond": 5,
+      "minecraft:dirt": 64,
+      "minecraft:oak_log": 12
+    },
+    "unlocked_items": [
+      "minecraft:dirt"
+    ],
+    "unlock_timestamps": {
+      "minecraft:dirt": 1716154382000
+    },
+    "enabled": true
+  }
+}
+```
+
 ### Native Multi-Loader Support
 
 *   ✅ **NeoForge 1.21.1** - Native compilation using official Mojang mappings.
