@@ -22,6 +22,7 @@ public class JourneyModeMenu extends AbstractContainerMenu {
     private final Player player;
     private final JourneyDataAttachment journeyData;
     private boolean depositSlotEnabled = true;
+    private boolean inJourneyTab = false;
 
     // Custom slot that can be disabled
     private static class ConditionalSlot extends Slot {
@@ -197,6 +198,17 @@ public class JourneyModeMenu extends AbstractContainerMenu {
             ItemStack slotStack = slot.getItem();
             itemstack = slotStack.copy();
 
+            // If we are in the Journey tab, shift-clicking acts as a dump
+            if (this.inJourneyTab) {
+                if (this.journeyData.isUnlocked(slotStack.getItem())) {
+                    slot.set(ItemStack.EMPTY);
+                    slot.setChanged();
+                    return ItemStack.EMPTY; // Deleted/consumed
+                } else {
+                    return ItemStack.EMPTY; // Do nothing if not unlocked yet
+                }
+            }
+
             // Slot 0 is deposit slot
             // Slots 1-27 are player inventory
             // Slots 28-36 are player hotbar
@@ -250,5 +262,12 @@ public class JourneyModeMenu extends AbstractContainerMenu {
      */
     public void setDepositSlotEnabled(boolean enabled) {
         this.depositSlotEnabled = enabled;
+    }
+
+    /**
+     * Sync tab state from client
+     */
+    public void setInJourneyTab(boolean inJourneyTab) {
+        this.inJourneyTab = inJourneyTab;
     }
 }

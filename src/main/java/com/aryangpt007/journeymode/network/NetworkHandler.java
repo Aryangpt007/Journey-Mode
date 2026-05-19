@@ -5,6 +5,8 @@ import com.aryangpt007.journeymode.network.packets.OpenJourneyMenuPacket;
 import com.aryangpt007.journeymode.network.packets.RequestItemPacket;
 import com.aryangpt007.journeymode.network.packets.SubmitDepositPacket;
 import com.aryangpt007.journeymode.network.packets.SyncJourneyDataPacket;
+import com.aryangpt007.journeymode.network.packets.SyncTabPacket;
+import com.aryangpt007.journeymode.network.packets.DeleteCarriedPacket;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -36,6 +38,18 @@ public class NetworkHandler {
             SubmitDepositPacket.TYPE,
             SubmitDepositPacket.STREAM_CODEC,
             SubmitDepositPacket::handle
+        );
+
+        registrar.playToServer(
+            SyncTabPacket.TYPE,
+            SyncTabPacket.STREAM_CODEC,
+            SyncTabPacket::handle
+        );
+
+        registrar.playToServer(
+            DeleteCarriedPacket.TYPE,
+            DeleteCarriedPacket.STREAM_CODEC,
+            DeleteCarriedPacket::handle
         );
         
         registrar.playToClient(

@@ -66,6 +66,9 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             this.scrollOffset = 0; // Reset scroll when search changes
         });
         this.addRenderableWidget(this.searchBox);
+        
+        // Sync initial tab state to server
+        PacketDistributor.sendToServer(new com.aryangpt007.journeymode.network.packets.SyncTabPacket(currentTab == Tab.JOURNEY));
     }
 
     @Override
@@ -320,10 +323,12 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             if (mouseX >= x + 10 && mouseX < x + 70) {
                 currentTab = Tab.DEPOSIT;
                 this.menu.setDepositSlotEnabled(true);
+                PacketDistributor.sendToServer(new com.aryangpt007.journeymode.network.packets.SyncTabPacket(false));
                 return true;
             } else if (mouseX >= x + 80 && mouseX < x + 140) {
                 currentTab = Tab.JOURNEY;
                 this.menu.setDepositSlotEnabled(false);
+                PacketDistributor.sendToServer(new com.aryangpt007.journeymode.network.packets.SyncTabPacket(true));
                 return true;
             }
         }
@@ -366,6 +371,18 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                 int itemY = y + 18 + row * 18;
 
                 if (mouseX >= itemX && mouseX < itemX + 16 && mouseY >= itemY && mouseY < itemY + 16) {
+                    // Check if player is holding/carrying an item
+                    ItemStack carriedStack = this.menu.getCarried();
+                    if (!carriedStack.isEmpty()) {
+                        String carriedItemId = BuiltInRegistries.ITEM.getKey(carriedStack.getItem()).toString();
+                        if (carriedItemId.equals(itemId)) {
+                            // Send packet to delete carried item
+                            PacketDistributor.sendToServer(new com.aryangpt007.journeymode.network.packets.DeleteCarriedPacket());
+                            return true;
+                        }
+                        return false; // Clicking with a different item does nothing
+                    }
+                    
                     // Request item from server
                     int count = hasShiftDown() ? 64 : 1;
                     PacketDistributor.sendToServer(new RequestItemPacket(itemId, count));
