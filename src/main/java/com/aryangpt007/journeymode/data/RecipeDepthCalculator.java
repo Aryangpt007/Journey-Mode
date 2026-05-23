@@ -21,6 +21,7 @@ public class RecipeDepthCalculator {
     private final Set<Item> calculating = new HashSet<>(); // For cycle detection
     private final RecipeManager recipeManager;
     private final RegistryAccess registryAccess;
+    private Map<Item, List<RecipeHolder<?>>> recipesByOutput = null;
 
     public RecipeDepthCalculator(RecipeManager recipeManager, RegistryAccess registryAccess) {
         this.recipeManager = recipeManager;
@@ -38,7 +39,7 @@ public class RecipeDepthCalculator {
      * - Depth 2: Requires 25% of stack size
      * - Depth 3+: Requires 1 item
      */
-    public int calculateThreshold(Item item) {
+    public synchronized int calculateThreshold(Item item) {
         // Check for config override first
         String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
         Integer configOverride = ConfigHandler.getThresholdOverride(itemId);
@@ -68,7 +69,7 @@ public class RecipeDepthCalculator {
      * Get the recipe depth of an item (how many crafting steps from raw materials)
      * Returns 0 for raw materials (no recipe)
      */
-    public int getRecipeDepth(Item item) {
+    public synchronized int getRecipeDepth(Item item) {
         if (depthCache.containsKey(item)) {
             return depthCache.get(item);
         }
@@ -94,9 +95,13 @@ public class RecipeDepthCalculator {
             int minDepth = Integer.MAX_VALUE;
             
             for (RecipeHolder<?> holder : recipesForItem) {
-                Recipe<?> recipe = holder.value();
-                int recipeDepth = calculateRecipeDepth(recipe);
-                minDepth = Math.min(minDepth, recipeDepth);
+                try {
+                    Recipe<?> recipe = holder.value();
+                    int recipeDepth = calculateRecipeDepth(recipe);
+                    minDepth = Math.min(minDepth, recipeDepth);
+                } catch (Throwable t) {
+                    // Ignore buggy recipe during calculation
+                }
             }
             
             int depth = minDepth == Integer.MAX_VALUE ? 0 : minDepth;
@@ -114,23 +119,40 @@ public class RecipeDepthCalculator {
     private int calculateRecipeDepth(Recipe<?> recipe) {
         int maxIngredientDepth = 0;
         
-        for (Ingredient ingredient : recipe.getIngredients()) {
-            if (ingredient.isEmpty()) continue;
+        try {
+            List<Ingredient> ingredients = recipe.getIngredients();
+            if (ingredients == null) return 1;
             
-            // Get all possible items for this ingredient
-            ItemStack[] possibleItems = ingredient.getItems();
-            if (possibleItems.length == 0) continue;
-            
-            // Use the minimum depth among possible items (easiest option)
-            int minItemDepth = Integer.MAX_VALUE;
-            for (ItemStack stack : possibleItems) {
-                int itemDepth = getRecipeDepth(stack.getItem());
-                minItemDepth = Math.min(minItemDepth, itemDepth);
+            for (Ingredient ingredient : ingredients) {
+                try {
+                    if (ingredient == null || ingredient.isEmpty()) continue;
+                    
+                    // Get all possible items for this ingredient
+                    ItemStack[] possibleItems = ingredient.getItems();
+                    if (possibleItems == null || possibleItems.length == 0) continue;
+                    
+                    // Use the minimum depth among possible items (easiest option)
+                    int minItemDepth = Integer.MAX_VALUE;
+                    for (ItemStack stack : possibleItems) {
+                        try {
+                            if (stack == null || stack.isEmpty()) continue;
+                            int itemDepth = getRecipeDepth(stack.getItem());
+                            minItemDepth = Math.min(minItemDepth, itemDepth);
+                        } catch (Throwable t) {
+                            // Ignore buggy items inside the ingredient
+                        }
+                    }
+                    
+                    if (minItemDepth != Integer.MAX_VALUE) {
+                        maxIngredientDepth = Math.max(maxIngredientDepth, minItemDepth);
+                    }
+                } catch (Throwable t) {
+                    // Ignore buggy ingredients
+                }
             }
-            
-            if (minItemDepth != Integer.MAX_VALUE) {
-                maxIngredientDepth = Math.max(maxIngredientDepth, minItemDepth);
-            }
+        } catch (Throwable t) {
+            // Log/ignore and treat this recipe as having no ingredients / depth 0
+            return 0;
         }
         
         return maxIngredientDepth + 1;
@@ -138,33 +160,43 @@ public class RecipeDepthCalculator {
 
     /**
      * Find all recipes that produce a specific item
+     * Uses a lazily-built index map to optimize performance from O(N) to O(1)
      */
     private List<RecipeHolder<?>> findRecipesProducing(Item item) {
-        List<RecipeHolder<?>> result = new ArrayList<>();
-        
-        for (RecipeHolder<?> holder : recipeManager.getRecipes()) {
-            Recipe<?> recipe = holder.value();
-            ItemStack output = recipe.getResultItem(registryAccess);
-            
-            if (!output.isEmpty() && output.is(item)) {
-                result.add(holder);
+        if (recipesByOutput == null) {
+            recipesByOutput = new HashMap<>();
+            try {
+                for (RecipeHolder<?> holder : recipeManager.getRecipes()) {
+                    try {
+                        Recipe<?> recipe = holder.value();
+                        ItemStack output = recipe.getResultItem(registryAccess);
+                        if (output != null && !output.isEmpty()) {
+                            recipesByOutput.computeIfAbsent(output.getItem(), k -> new ArrayList<>()).add(holder);
+                        }
+                    } catch (Throwable t) {
+                        // Skip buggy recipes during indexing
+                    }
+                }
+            } catch (Throwable t) {
+                // In case getRecipes() itself throws
             }
         }
         
-        return result;
+        return recipesByOutput.getOrDefault(item, Collections.emptyList());
     }
 
     /**
      * Clear the cache (call when recipes reload)
      */
-    public void clearCache() {
+    public synchronized void clearCache() {
         depthCache.clear();
+        recipesByOutput = null;
     }
 
     /**
      * Get debug info about an item's unlock requirements
      */
-    public String getDebugInfo(Item item) {
+    public synchronized String getDebugInfo(Item item) {
         int depth = getRecipeDepth(item);
         int threshold = calculateThreshold(item);
         int stackSize = item.getDefaultMaxStackSize();
