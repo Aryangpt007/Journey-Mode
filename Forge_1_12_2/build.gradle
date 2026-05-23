@@ -1,0 +1,65 @@
+plugins {
+    id 'java'
+    id 'com.gtnewhorizons.retrofuturagradle' version '1.4.0'
+}
+
+version = project.mod_version
+group = project.mod_group_id
+archivesBaseName = project.mod_id
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(8))
+    }
+}
+
+minecraft {
+    mcVersion = '1.12.2'
+    mcpMappingChannel = 'stable'
+    mcpMappingVersion = '39'
+    
+    extraRunJvmArguments.addAll([
+        "-ea:${project.group}"
+    ])
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = "CleanroomMC"
+        url = "https://maven.cleanroommc.com"
+    }
+}
+
+dependencies {
+    // Optional libraries or dependencies can be added here
+}
+
+processResources {
+    duplicatesStrategy = 'include'
+    inputs.property "version", project.version
+    inputs.property "mcversion", project.minecraft_version
+
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+        expand 'version':project.version, 'mcversion':project.minecraft_version
+    }
+        
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'mcmod.info'
+    }
+}
+
+jar {
+    manifest {
+        attributes([
+            "Specification-Title": "journeymode",
+            "Specification-Vendor": "aryangpt007",
+            "Specification-Version": "1",
+            "Implementation-Title": project.name,
+            "Implementation-Version": project.version,
+            "Implementation-Vendor" :"aryangpt007",
+            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+}

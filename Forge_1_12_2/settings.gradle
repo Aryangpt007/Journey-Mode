@@ -1,0 +1,9 @@
+pluginManagement {
+    repositories {
+        maven { url 'https://maven.cleanroommc.com' }
+        maven { url 'https://nexus.gtnewhorizons.com/repository/public/' }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'journeymode'

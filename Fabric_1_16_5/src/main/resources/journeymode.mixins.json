@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "com.aryangpt007.journeymode.mixins",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "HandledScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,16 @@
+[
+{
+  "modid": "journeymode",
+  "name": "Journey Mode",
+  "description": "Unlock unlimited access to items after collecting enough of them.",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["Aryangpt007"],
+  "credits": "Terraria for the design inspiration",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]
