@@ -42,7 +42,7 @@ public class GlobalDataHandler {
         return gameDir.resolve(FILE_NAME).toFile();
     }
 
-    public static void loadPlayerUnlocks(ServerPlayer player) {
+    public static synchronized void loadPlayerUnlocks(ServerPlayer player) {
         try {
             JourneyDataAttachment data = getPlayerData(player);
 

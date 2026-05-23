@@ -31,7 +31,7 @@ public class GlobalDataHandler {
      * Load player unlocks from global JSON file into the player's attachment.
      * If the player does not exist in the file, saves their current attachment data to the file.
      */
-    public static void loadPlayerUnlocks(ServerPlayer player) {
+    public static synchronized void loadPlayerUnlocks(ServerPlayer player) {
         try {
             JourneyDataAttachment data = player.getData(JourneyMode.JOURNEY_DATA);
             if (data == null) return;
