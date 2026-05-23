@@ -286,6 +286,19 @@ journey-mode/                  # Root NeoForge 1.21.1 Project
 
 ## 📋 Changelog
 
+### Version 1.7.0
+**Release Date:** May 23, 2026
+
+#### 🛡️ Mod Registry & Conflict Hardening
+* **Robust Error Isolation:** Implemented comprehensive defensive exception mapping when querying ingredient and output registries. Any third-party recipe classes that throw exceptions during retrieval are caught safely and defaulted, entirely preventing client rendering screen crashes.
+* **Severe Performance Optimizations:** Replaced the legacy linear scans over every registered mod recipe with a lazily-built $O(1)$ indexing map. This shifts threshold calculation from slow recursive loops to instant lookups, completely eliminating FPS stutter when opening the Journey menu in massive modpacks.
+
+#### 🧵 Concurrency & Persistence Upgrades
+* **Centralized Data Safety:** Synchronized player capability loading procedures to pair with global capability saves. This enforces mutual exclusion on all JSON profile read/write operations, eliminating file-corruption race conditions when multiple players log in and out concurrently on servers.
+* **Main-Thread Thread Safety:** Audited client/server network packets to ensure all asynchronous packet handling is correctly enqueued and processed on the main threads.
+
+---
+
 ### Version 1.6.0N
 **Release Date:** May 19, 2026
 
