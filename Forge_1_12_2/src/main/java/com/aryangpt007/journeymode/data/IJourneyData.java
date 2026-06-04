@@ -17,6 +17,7 @@ public interface IJourneyData {
     boolean depositItem(ItemStack stack);
     boolean isUnlocked(Item item);
     boolean isUnlocked(ItemStack stack);
+    boolean isUnlocked(String key);
     int getCollectedCount(Item item);
     int getCollectedCount(ItemStack stack);
     Set<String> getUnlockedItems();

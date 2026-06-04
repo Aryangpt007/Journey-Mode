@@ -10,6 +10,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
+import net.minecraft.nbt.JsonToNBT;
 import net.minecraftforge.common.util.Constants;
 
 import java.util.*;
@@ -149,15 +150,98 @@ public class JourneyData implements IJourneyData {
         return nbt;
     }
 
+    /**
+     * Helper to get a normalized ItemStack, preserving only subtype NBT tags or metadata.
+     */
+    public static ItemStack getNormalizedStack(ItemStack original) {
+        if (original.isEmpty()) return original;
+        ItemStack normalized = new ItemStack(original.getItem(), 1, original.getMetadata());
+        if (original.hasTagCompound()) {
+            NBTTagCompound originalTag = original.getTagCompound();
+            NBTTagCompound normalizedTag = new NBTTagCompound();
+            boolean hasSubtype = false;
+            
+            if (originalTag.hasKey("Potion")) {
+                normalizedTag.setString("Potion", originalTag.getString("Potion"));
+                hasSubtype = true;
+            }
+            if (originalTag.hasKey("CustomPotionEffects")) {
+                normalizedTag.setTag("CustomPotionEffects", originalTag.getTag("CustomPotionEffects"));
+                hasSubtype = true;
+            }
+            if (originalTag.hasKey("CustomPotionColor")) {
+                normalizedTag.setInteger("CustomPotionColor", originalTag.getInteger("CustomPotionColor"));
+                hasSubtype = true;
+            }
+            if (originalTag.hasKey("StoredEnchantments")) {
+                normalizedTag.setTag("StoredEnchantments", originalTag.getTag("StoredEnchantments"));
+                hasSubtype = true;
+            }
+            if (originalTag.hasKey("Effects")) {
+                normalizedTag.setTag("Effects", originalTag.getTag("Effects"));
+                hasSubtype = true;
+            }
+            
+            if (hasSubtype) {
+                normalized.setTagCompound(normalizedTag);
+            }
+        }
+        return normalized;
+    }
+
+    /**
+     * Helper to generate a structured key from an ItemStack, preserving subtype NBT tags and metadata.
+     */
     public static String getItemKey(ItemStack stack) {
         if (stack.isEmpty() || stack.getItem().getRegistryName() == null) {
             return "";
         }
-        String baseId = stack.getItem().getRegistryName().toString();
-        if (stack.getItem().getHasSubtypes() && !stack.getItem().isDamageable()) {
-            return baseId + ":" + stack.getMetadata();
+        ItemStack normalized = getNormalizedStack(stack);
+        String baseId = normalized.getItem().getRegistryName().toString();
+        // Preserve metadata for metadata-based subtypes (like colored wool/dyes)
+        if (normalized.getItem().getHasSubtypes() && !normalized.getItem().isDamageable()) {
+            baseId = baseId + ":" + normalized.getMetadata();
+        }
+        if (normalized.hasTagCompound() && !normalized.getTagCompound().getKeySet().isEmpty()) {
+            return baseId + "|" + normalized.getTagCompound().toString();
         }
         return baseId;
+    }
+
+    /**
+     * Helper to reconstruct an ItemStack from a structured key.
+     */
+    public static ItemStack itemStackFromKey(String key) {
+        if (key == null || key.isEmpty()) return ItemStack.EMPTY;
+        int delimiter = key.indexOf('|');
+        String keyWithoutNbt = delimiter == -1 ? key : key.substring(0, delimiter);
+        
+        int colon = keyWithoutNbt.indexOf(':');
+        int metadata = 0;
+        String baseId = keyWithoutNbt;
+        int lastColon = keyWithoutNbt.lastIndexOf(':');
+        if (lastColon > 0 && lastColon != keyWithoutNbt.indexOf(':')) {
+            try {
+                metadata = Integer.parseInt(keyWithoutNbt.substring(lastColon + 1));
+                baseId = keyWithoutNbt.substring(0, lastColon);
+            } catch (NumberFormatException e) {
+                // Not a metadata suffix
+            }
+        }
+        
+        Item item = Item.REGISTRY.getObject(new net.minecraft.util.ResourceLocation(baseId));
+        if (item == null || item == net.minecraft.init.Items.AIR) return ItemStack.EMPTY;
+        ItemStack stack = new ItemStack(item, 1, metadata);
+        
+        if (delimiter != -1) {
+            String nbtStr = key.substring(delimiter + 1);
+            try {
+                stack.setTagCompound(JsonToNBT.getTagFromJson(nbtStr));
+            } catch (Exception e) {
+                // Ignore parsing errors
+            }
+        }
+        return stack;
     }
 
     @Override
@@ -182,16 +266,16 @@ public class JourneyData implements IJourneyData {
             return false;
         }
         
-        String itemId = getItemKey(stack);
-        int currentCount = collectedCounts.getOrDefault(itemId, 0);
+        String key = getItemKey(stack);
+        int currentCount = collectedCounts.getOrDefault(key, 0);
         int newCount = currentCount + stack.getCount();
-        collectedCounts.put(itemId, newCount);
+        collectedCounts.put(key, newCount);
 
         int threshold = getThreshold(stack);
         
         if (currentCount < threshold && newCount >= threshold) {
-            unlockedItems.add(itemId);
-            unlockTimestamps.put(itemId, System.currentTimeMillis());
+            unlockedItems.add(key);
+            unlockTimestamps.put(key, System.currentTimeMillis());
             return true;
         }
         return false;
@@ -201,13 +285,21 @@ public class JourneyData implements IJourneyData {
     public boolean isUnlocked(Item item) {
         if (item.getRegistryName() == null) return false;
         String itemId = item.getRegistryName().toString();
-        return unlockedItems.contains(itemId);
+        if (unlockedItems.contains(itemId)) return true;
+        for (String key : unlockedItems) {
+            if (key.startsWith(itemId + "|") || key.startsWith(itemId + ":")) return true;
+        }
+        return false;
     }
 
     @Override
     public boolean isUnlocked(ItemStack stack) {
-        String itemId = getItemKey(stack);
-        return unlockedItems.contains(itemId);
+        return isUnlocked(getItemKey(stack));
+    }
+
+    @Override
+    public boolean isUnlocked(String key) {
+        return unlockedItems.contains(key);
     }
 
     @Override
@@ -219,8 +311,7 @@ public class JourneyData implements IJourneyData {
 
     @Override
     public int getCollectedCount(ItemStack stack) {
-        String itemId = getItemKey(stack);
-        return collectedCounts.getOrDefault(itemId, 0);
+        return collectedCounts.getOrDefault(getItemKey(stack), 0);
     }
 
     @Override

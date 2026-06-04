@@ -149,7 +149,7 @@ public class JourneyModeMenu extends AbstractContainerMenu {
             }
             
             // Check if already unlocked
-            if (journeyData.isUnlocked(stack.getItem())) {
+            if (journeyData.isUnlocked(stack)) {
                 player.displayClientMessage(
                     new TextComponent("§e" + stack.getHoverName().getString() + " is already unlocked!"),
                     false
@@ -172,8 +172,8 @@ public class JourneyModeMenu extends AbstractContainerMenu {
                     false
                 );
             } else {
-                int progress = journeyData.getProgress(stack.getItem());
-                int collected = journeyData.getCollectedCount(stack.getItem());
+                int progress = journeyData.getProgress(stack);
+                int collected = journeyData.getCollectedCount(stack);
                 player.displayClientMessage(
                     JourneyMode.translatable("deposit_message", stack.getCount(), stack.getHoverName(), collected, threshold, progress),
                     true // Action bar
@@ -200,7 +200,7 @@ public class JourneyModeMenu extends AbstractContainerMenu {
 
             // If we are in the Journey tab, shift-clicking acts as a dump
             if (this.inJourneyTab) {
-                if (this.journeyData.isUnlocked(slotStack.getItem())) {
+                if (this.journeyData.isUnlocked(slotStack)) {
                     slot.set(ItemStack.EMPTY);
                     slot.setChanged();
                     return ItemStack.EMPTY; // Deleted/consumed

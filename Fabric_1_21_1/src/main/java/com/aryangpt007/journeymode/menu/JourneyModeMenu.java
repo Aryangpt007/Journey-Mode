@@ -132,7 +132,7 @@ public class JourneyModeMenu extends AbstractContainerMenu {
                 return;
             }
             
-            if (journeyData.isUnlocked(stack.getItem())) {
+            if (journeyData.isUnlocked(stack, player.level().registryAccess())) {
                 player.displayClientMessage(
                     Component.literal("§e" + stack.getHoverName().getString() + " is already unlocked!"),
                     false
@@ -155,8 +155,8 @@ public class JourneyModeMenu extends AbstractContainerMenu {
                     false
                 );
             } else {
-                int progress = journeyData.getProgress(stack.getItem());
-                int collected = journeyData.getCollectedCount(stack.getItem());
+                int progress = journeyData.getProgress(stack, player.level().registryAccess());
+                int collected = journeyData.getCollectedCount(stack, player.level().registryAccess());
                 player.displayClientMessage(
                     JourneyMode.translatable("deposit_message", stack.getCount(), stack.getHoverName(), collected, threshold, progress),
                     true
@@ -180,7 +180,7 @@ public class JourneyModeMenu extends AbstractContainerMenu {
             itemstack = slotStack.copy();
 
             if (this.inJourneyTab) {
-                if (this.journeyData.isUnlocked(slotStack.getItem())) {
+                if (this.journeyData.isUnlocked(slotStack, player.level().registryAccess())) {
                     slot.set(ItemStack.EMPTY);
                     slot.setChanged();
                     return ItemStack.EMPTY;

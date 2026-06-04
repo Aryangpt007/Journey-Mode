@@ -10,6 +10,9 @@ import net.minecraft.util.registry.Registry;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.RecipeManager;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.nbt.CompoundNBT;
+import net.minecraft.nbt.JsonToNBT;
 
 import java.util.*;
 
@@ -142,39 +145,146 @@ public class JourneyDataAttachment {
      * @param  Registry access for recipes
      * @return true if this deposit unlocked the item
      */
+    /**
+     * Helper to get a normalized ItemStack, preserving only subtype NBT tags.
+     */
+    public static ItemStack getNormalizedStack(ItemStack original) {
+        if (original.isEmpty()) return original;
+        ItemStack normalized = new ItemStack(original.getItem());
+        if (original.hasTag()) {
+            CompoundNBT originalTag = original.getTag();
+            CompoundNBT normalizedTag = new CompoundNBT();
+            boolean hasSubtype = false;
+            
+            if (originalTag.contains("Potion")) {
+                normalizedTag.putString("Potion", originalTag.getString("Potion"));
+                hasSubtype = true;
+            }
+            if (originalTag.contains("CustomPotionEffects")) {
+                normalizedTag.put("CustomPotionEffects", originalTag.get("CustomPotionEffects"));
+                hasSubtype = true;
+            }
+            if (originalTag.contains("CustomPotionColor")) {
+                normalizedTag.putInt("CustomPotionColor", originalTag.getInt("CustomPotionColor"));
+                hasSubtype = true;
+            }
+            if (originalTag.contains("StoredEnchantments")) {
+                normalizedTag.put("StoredEnchantments", originalTag.get("StoredEnchantments"));
+                hasSubtype = true;
+            }
+            if (originalTag.contains("Effects")) {
+                normalizedTag.put("Effects", originalTag.get("Effects"));
+                hasSubtype = true;
+            }
+            
+            if (hasSubtype) {
+                normalized.setTag(normalizedTag);
+            }
+        }
+        return normalized;
+    }
+
+    /**
+     * Helper to generate a structured key from an ItemStack, preserving subtype NBT tags.
+     */
+    public static String getItemKey(ItemStack stack) {
+        ItemStack normalized = getNormalizedStack(stack);
+        String baseId = Registry.ITEM.getKey(normalized.getItem()).toString();
+        if (normalized.hasTag() && !normalized.getTag().isEmpty()) {
+            return baseId + "|" + normalized.getTag().toString();
+        }
+        return baseId;
+    }
+
+    /**
+     * Helper to reconstruct an ItemStack from a structured key.
+     */
+    public static ItemStack itemStackFromKey(String key) {
+        if (key == null || key.isEmpty()) return ItemStack.EMPTY;
+        int delimiter = key.indexOf('|');
+        if (delimiter == -1) {
+            Item item = Registry.ITEM.get(new ResourceLocation(key));
+            return item != null ? new ItemStack(item) : ItemStack.EMPTY;
+        }
+        String itemId = key.substring(0, delimiter);
+        String nbtStr = key.substring(delimiter + 1);
+        try {
+            Item item = Registry.ITEM.get(new ResourceLocation(itemId));
+            if (item == null) return ItemStack.EMPTY;
+            ItemStack stack = new ItemStack(item);
+            stack.setTag(net.minecraft.nbt.JsonToNBT.parseTag(nbtStr));
+            return stack;
+        } catch (Exception e) {
+            Item item = Registry.ITEM.get(new ResourceLocation(itemId));
+            return item != null ? new ItemStack(item) : ItemStack.EMPTY;
+        }
+    }
+
+    /**
+     * Deposit items into Journey Mode tracking
+     * @param stack The ItemStack to deposit
+     * @param recipeManager The recipe manager for threshold calculation
+     * @param  Registry access for recipes
+     * @return true if this deposit unlocked the item
+     */
     public boolean depositItem(ItemStack stack, RecipeManager recipeManager) {
         initializeCalculator(recipeManager);
         
-        String itemId = Registry.ITEM.getKey(stack.getItem()).toString();
-        int currentCount = collectedCounts.getOrDefault(itemId, 0);
+        String key = getItemKey(stack);
+        int currentCount = collectedCounts.getOrDefault(key, 0);
         int newCount = currentCount + stack.getCount();
-        collectedCounts.put(itemId, newCount);
+        collectedCounts.put(key, newCount);
 
         int threshold = getThreshold(stack.getItem());
         
         // Check if we just reached the threshold
         if (currentCount < threshold && newCount >= threshold) {
-            unlockedItems.add(itemId);
-            unlockTimestamps.put(itemId, System.currentTimeMillis());
+            unlockedItems.add(key);
+            unlockTimestamps.put(key, System.currentTimeMillis());
             return true; // Item was just unlocked
         }
         return false;
     }
 
     /**
-     * Check if an item is unlocked for infinite retrieval
+     * Check if an item is unlocked for infinite retrieval (base fallback)
      */
     public boolean isUnlocked(Item item) {
         String itemId = Registry.ITEM.getKey(item).toString();
-        return unlockedItems.contains(itemId);
+        if (unlockedItems.contains(itemId)) return true;
+        for (String key : unlockedItems) {
+            if (key.startsWith(itemId + "|")) return true;
+        }
+        return false;
     }
 
     /**
-     * Get the current collection count for an item
+     * Check if a specific key is unlocked
+     */
+    public boolean isUnlocked(String key) {
+        return unlockedItems.contains(key);
+    }
+
+    /**
+     * Check if a specific ItemStack is unlocked
+     */
+    public boolean isUnlocked(ItemStack stack) {
+        return isUnlocked(getItemKey(stack));
+    }
+
+    /**
+     * Get the current collection count for an item (base fallback)
      */
     public int getCollectedCount(Item item) {
         String itemId = Registry.ITEM.getKey(item).toString();
         return collectedCounts.getOrDefault(itemId, 0);
+    }
+
+    /**
+     * Get the current collection count for a specific ItemStack
+     */
+    public int getCollectedCount(ItemStack stack) {
+        return collectedCounts.getOrDefault(getItemKey(stack), 0);
     }
 
     /**
@@ -205,11 +315,20 @@ public class JourneyDataAttachment {
     }
 
     /**
-     * Get progress percentage for an item (0-100)
+     * Get progress percentage for an item (0-100) (base fallback)
      */
     public int getProgress(Item item) {
         int count = getCollectedCount(item);
         int threshold = getThreshold(item);
+        return Math.min(100, (count * 100) / threshold);
+    }
+
+    /**
+     * Get progress percentage for a specific ItemStack
+     */
+    public int getProgress(ItemStack stack) {
+        int count = getCollectedCount(stack);
+        int threshold = getThreshold(stack.getItem());
         return Math.min(100, (count * 100) / threshold);
     }
 

@@ -10,6 +10,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.nbt.Tag;
+import net.minecraft.core.component.DataComponents;
+import com.aryangpt007.journeymode.JourneyMode;
 
 import java.util.*;
 
@@ -136,6 +142,68 @@ public class JourneyDataAttachment {
     }
 
     /**
+     * Helper to get a normalized ItemStack, preserving only subtype components.
+     */
+    public static ItemStack getNormalizedStack(ItemStack original) {
+        if (original.isEmpty()) return original;
+        ItemStack normalized = new ItemStack(original.getItem());
+        if (original.has(DataComponents.POTION_CONTENTS)) {
+            normalized.set(DataComponents.POTION_CONTENTS, original.get(DataComponents.POTION_CONTENTS));
+        }
+        if (original.has(DataComponents.STORED_ENCHANTMENTS)) {
+            normalized.set(DataComponents.STORED_ENCHANTMENTS, original.get(DataComponents.STORED_ENCHANTMENTS));
+        }
+        if (original.has(DataComponents.INSTRUMENT)) {
+            normalized.set(DataComponents.INSTRUMENT, original.get(DataComponents.INSTRUMENT));
+        }
+        if (original.has(DataComponents.SUSPICIOUS_STEW_EFFECTS)) {
+            normalized.set(DataComponents.SUSPICIOUS_STEW_EFFECTS, original.get(DataComponents.SUSPICIOUS_STEW_EFFECTS));
+        }
+        return normalized;
+    }
+
+    /**
+     * Helper to generate a structured key from an ItemStack, preserving subtype components.
+     */
+    public static String getItemKey(ItemStack stack, RegistryAccess registryAccess) {
+        ItemStack normalized = getNormalizedStack(stack);
+        String baseId = BuiltInRegistries.ITEM.getKey(normalized.getItem()).toString();
+        if (normalized.has(DataComponents.POTION_CONTENTS) ||
+            normalized.has(DataComponents.STORED_ENCHANTMENTS) ||
+            normalized.has(DataComponents.INSTRUMENT) ||
+            normalized.has(DataComponents.SUSPICIOUS_STEW_EFFECTS)) {
+            try {
+                Tag tag = normalized.save(registryAccess);
+                return baseId + "|" + tag.toString();
+            } catch (Exception e) {
+                // Fallback
+            }
+        }
+        return baseId;
+    }
+
+    /**
+     * Helper to reconstruct an ItemStack from a structured key.
+     */
+    public static ItemStack itemStackFromKey(String key, RegistryAccess registryAccess) {
+        if (key == null || key.isEmpty()) return ItemStack.EMPTY;
+        int delimiter = key.indexOf('|');
+        if (delimiter == -1) {
+            Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(key));
+            return item != null ? new ItemStack(item) : ItemStack.EMPTY;
+        }
+        String itemId = key.substring(0, delimiter);
+        String nbtStr = key.substring(delimiter + 1);
+        try {
+            CompoundTag tag = TagParser.parseTag(nbtStr);
+            return ItemStack.parse(registryAccess, tag).orElse(ItemStack.EMPTY);
+        } catch (Exception e) {
+            Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+            return item != null ? new ItemStack(item) : ItemStack.EMPTY;
+        }
+    }
+
+    /**
      * Deposit items into Journey Mode tracking
      * @param stack The ItemStack to deposit
      * @param recipeManager The recipe manager for threshold calculation
@@ -145,36 +213,61 @@ public class JourneyDataAttachment {
     public boolean depositItem(ItemStack stack, RecipeManager recipeManager, RegistryAccess registryAccess) {
         initializeCalculator(recipeManager, registryAccess);
         
-        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-        int currentCount = collectedCounts.getOrDefault(itemId, 0);
+        String key = getItemKey(stack, registryAccess);
+        int currentCount = collectedCounts.getOrDefault(key, 0);
         int newCount = currentCount + stack.getCount();
-        collectedCounts.put(itemId, newCount);
+        collectedCounts.put(key, newCount);
 
         int threshold = getThreshold(stack.getItem());
         
         // Check if we just reached the threshold
         if (currentCount < threshold && newCount >= threshold) {
-            unlockedItems.add(itemId);
-            unlockTimestamps.put(itemId, System.currentTimeMillis());
+            unlockedItems.add(key);
+            unlockTimestamps.put(key, System.currentTimeMillis());
             return true; // Item was just unlocked
         }
         return false;
     }
 
     /**
-     * Check if an item is unlocked for infinite retrieval
+     * Check if an item is unlocked for infinite retrieval (base fallback)
      */
     public boolean isUnlocked(Item item) {
         String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
-        return unlockedItems.contains(itemId);
+        if (unlockedItems.contains(itemId)) return true;
+        for (String key : unlockedItems) {
+            if (key.startsWith(itemId + "|")) return true;
+        }
+        return false;
     }
 
     /**
-     * Get the current collection count for an item
+     * Check if a specific key is unlocked
+     */
+    public boolean isUnlocked(String key) {
+        return unlockedItems.contains(key);
+    }
+
+    /**
+     * Check if a specific ItemStack is unlocked
+     */
+    public boolean isUnlocked(ItemStack stack, RegistryAccess registryAccess) {
+        return isUnlocked(getItemKey(stack, registryAccess));
+    }
+
+    /**
+     * Get the current collection count for an item (base fallback)
      */
     public int getCollectedCount(Item item) {
         String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
         return collectedCounts.getOrDefault(itemId, 0);
+    }
+
+    /**
+     * Get the current collection count for a specific ItemStack
+     */
+    public int getCollectedCount(ItemStack stack, RegistryAccess registryAccess) {
+        return collectedCounts.getOrDefault(getItemKey(stack, registryAccess), 0);
     }
 
     /**
@@ -205,11 +298,20 @@ public class JourneyDataAttachment {
     }
 
     /**
-     * Get progress percentage for an item (0-100)
+     * Get progress percentage for an item (0-100) (base fallback)
      */
     public int getProgress(Item item) {
         int count = getCollectedCount(item);
         int threshold = getThreshold(item);
+        return Math.min(100, (count * 100) / threshold);
+    }
+
+    /**
+     * Get progress percentage for a specific ItemStack
+     */
+    public int getProgress(ItemStack stack, RegistryAccess registryAccess) {
+        int count = getCollectedCount(stack, registryAccess);
+        int threshold = getThreshold(stack.getItem());
         return Math.min(100, (count * 100) / threshold);
     }
 
