@@ -38,11 +38,10 @@ public record RequestItemPacket(String itemId, int count) implements CustomPacke
             if (context.player() instanceof ServerPlayer serverPlayer) {
                 JourneyDataAttachment journeyData = serverPlayer.getData(JourneyMode.JOURNEY_DATA);
                 
-                ResourceLocation itemResourceLocation = ResourceLocation.parse(packet.itemId);
-                Item item = BuiltInRegistries.ITEM.get(itemResourceLocation);
+                ItemStack stack = JourneyDataAttachment.itemStackFromKey(packet.itemId, serverPlayer.level().registryAccess());
                 
-                if (item != null && journeyData.isUnlocked(item)) {
-                    ItemStack stack = new ItemStack(item, Math.min(packet.count, 64));
+                if (!stack.isEmpty() && journeyData.isUnlocked(packet.itemId)) {
+                    stack.setCount(Math.min(packet.count, 64));
                     
                     // Try to add to inventory, if full drop on ground
                     if (!serverPlayer.getInventory().add(stack)) {

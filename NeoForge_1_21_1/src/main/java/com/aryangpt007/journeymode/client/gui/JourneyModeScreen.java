@@ -190,8 +190,8 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                 );
                 
                 int threshold = data.getThreshold(slotItem.getItem());
-                int collected = data.getCollectedCount(slotItem.getItem());
-                boolean alreadyUnlocked = data.isUnlocked(slotItem.getItem());
+                int collected = data.getCollectedCount(slotItem, this.minecraft.level.registryAccess());
+                boolean alreadyUnlocked = data.isUnlocked(slotItem, this.minecraft.level.registryAccess());
                 
                 if (alreadyUnlocked) {
                     guiGraphics.drawString(this.font, "§a✓ Already Unlocked!", x + 8, infoY, 0x00FF00, false);
@@ -199,7 +199,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                     guiGraphics.drawString(this.font, "Required: " + threshold + " items", x + 8, infoY, 0x404040, false);
                     guiGraphics.drawString(this.font, "Collected: " + collected + "/" + threshold, x + 8, infoY + 12, 0x404040, false);
                     
-                    int progress = data.getProgress(slotItem.getItem());
+                    int progress = data.getProgress(slotItem, this.minecraft.level.registryAccess());
                     guiGraphics.drawString(this.font, "Progress: " + progress + "%", x + 8, infoY + 24, 0x606060, false);
                 }
             }
@@ -231,8 +231,9 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         int endIndex = Math.min(startIndex + (VISIBLE_ROWS * ITEMS_PER_ROW), unlockedItems.size());
 
         for (int i = startIndex; i < endIndex; i++) {
-            String itemId = unlockedItems.get(i);
-            Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+            String key = unlockedItems.get(i);
+            ItemStack stack = JourneyDataAttachment.itemStackFromKey(key, this.minecraft.level.registryAccess());
+            if (stack.isEmpty()) continue;
             
             int gridIndex = i - startIndex;
             int row = gridIndex / ITEMS_PER_ROW;
@@ -247,7 +248,6 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             guiGraphics.fill(itemX, itemY, itemX + 16, itemY + 16, 0xFF8B8B8B);
             
             // Render item
-            ItemStack stack = new ItemStack(item);
             guiGraphics.renderItem(stack, itemX, itemY);
             
             // Check if hovering for highlight
@@ -267,11 +267,13 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         // Filter by search query if present
         if (!searchQuery.isEmpty()) {
             List<String> filtered = new ArrayList<>();
-            for (String itemId : items) {
-                Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
-                String itemName = new ItemStack(item).getHoverName().getString().toLowerCase();
-                if (itemName.contains(searchQuery)) {
-                    filtered.add(itemId);
+            for (String key : items) {
+                ItemStack stack = JourneyDataAttachment.itemStackFromKey(key, this.minecraft.level.registryAccess());
+                if (!stack.isEmpty()) {
+                    String itemName = stack.getHoverName().getString().toLowerCase();
+                    if (itemName.contains(searchQuery)) {
+                        filtered.add(key);
+                    }
                 }
             }
             return filtered;
@@ -294,8 +296,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             int endIndex = Math.min(startIndex + (VISIBLE_ROWS * ITEMS_PER_ROW), unlockedItems.size());
 
             for (int i = startIndex; i < endIndex; i++) {
-                String itemId = unlockedItems.get(i);
-                Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+                String key = unlockedItems.get(i);
                 
                 int gridIndex = i - startIndex;
                 int row = gridIndex / ITEMS_PER_ROW;
@@ -305,7 +306,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                 int itemY = y + 18 + row * 18;
 
                 if (mouseX >= itemX && mouseX < itemX + 16 && mouseY >= itemY && mouseY < itemY + 16) {
-                    ItemStack stack = new ItemStack(item);
+                    ItemStack stack = JourneyDataAttachment.itemStackFromKey(key, this.minecraft.level.registryAccess());
                     guiGraphics.renderTooltip(this.font, stack, mouseX, mouseY);
                     break;
                 }

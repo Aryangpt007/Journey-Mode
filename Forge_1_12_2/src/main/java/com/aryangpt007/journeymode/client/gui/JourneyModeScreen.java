@@ -208,14 +208,9 @@ public class JourneyModeScreen extends GuiContainer {
 
         // Step 1: Draw all the slot backgrounds (flat 2D, unlit)
         for (int i = startIndex; i < endIndex; i++) {
-            String itemId = unlockedItems.get(i);
-            String[] parts = itemId.split(":");
-            String regName = itemId;
-            if (parts.length > 2) {
-                regName = parts[0] + ":" + parts[1];
-            }
-            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(regName));
-            if (item == null) continue;
+            String key = unlockedItems.get(i);
+            ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
+            if (stack.isEmpty()) continue;
             
             int gridIndex = i - startIndex;
             int row = gridIndex / ITEMS_PER_ROW;
@@ -231,18 +226,9 @@ public class JourneyModeScreen extends GuiContainer {
         // Step 2: Enable GUI standard item lighting and render all the items
         net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
         for (int i = startIndex; i < endIndex; i++) {
-            String itemId = unlockedItems.get(i);
-            String[] parts = itemId.split(":");
-            String regName = itemId;
-            int meta = 0;
-            if (parts.length > 2) {
-                regName = parts[0] + ":" + parts[1];
-                try {
-                    meta = Integer.parseInt(parts[2]);
-                } catch (NumberFormatException ignored) {}
-            }
-            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(regName));
-            if (item == null) continue;
+            String key = unlockedItems.get(i);
+            ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
+            if (stack.isEmpty()) continue;
             
             int gridIndex = i - startIndex;
             int row = gridIndex / ITEMS_PER_ROW;
@@ -251,7 +237,6 @@ public class JourneyModeScreen extends GuiContainer {
             int itemX = x + 8 + col * 18;
             int itemY = y + 18 + row * 18;
             
-            ItemStack stack = new ItemStack(item, 1, meta);
             this.itemRender.renderItemAndEffectIntoGUI(stack, itemX, itemY);
             this.itemRender.renderItemOverlays(this.fontRenderer, stack, itemX, itemY);
         }
@@ -259,14 +244,9 @@ public class JourneyModeScreen extends GuiContainer {
 
         // Step 3: Draw hover highlights (flat 2D, semi-transparent overlay)
         for (int i = startIndex; i < endIndex; i++) {
-            String itemId = unlockedItems.get(i);
-            String[] parts = itemId.split(":");
-            String regName = itemId;
-            if (parts.length > 2) {
-                regName = parts[0] + ":" + parts[1];
-            }
-            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(regName));
-            if (item == null) continue;
+            String key = unlockedItems.get(i);
+            ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
+            if (stack.isEmpty()) continue;
             
             int gridIndex = i - startIndex;
             int row = gridIndex / ITEMS_PER_ROW;
@@ -286,22 +266,13 @@ public class JourneyModeScreen extends GuiContainer {
         
         if (!searchQuery.isEmpty()) {
             List<String> filtered = new ArrayList<>();
-            for (String itemId : items) {
-                String[] parts = itemId.split(":");
-                String regName = itemId;
-                int meta = 0;
-                if (parts.length > 2) {
-                    regName = parts[0] + ":" + parts[1];
-                    try {
-                        meta = Integer.parseInt(parts[2]);
-                    } catch (NumberFormatException ignored) {}
-                }
-                
-                Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(regName));
-                if (item == null) continue;
-                String itemName = new ItemStack(item, 1, meta).getDisplayName().toLowerCase();
-                if (itemName.contains(searchQuery)) {
-                    filtered.add(itemId);
+            for (String key : items) {
+                ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
+                if (!stack.isEmpty()) {
+                    String itemName = stack.getDisplayName().toLowerCase();
+                    if (itemName.contains(searchQuery)) {
+                        filtered.add(key);
+                    }
                 }
             }
             return filtered;
@@ -324,19 +295,7 @@ public class JourneyModeScreen extends GuiContainer {
             int endIndex = Math.min(startIndex + (VISIBLE_ROWS * ITEMS_PER_ROW), unlockedItems.size());
 
             for (int i = startIndex; i < endIndex; i++) {
-                String itemId = unlockedItems.get(i);
-                String[] parts = itemId.split(":");
-                String regName = itemId;
-                int meta = 0;
-                if (parts.length > 2) {
-                    regName = parts[0] + ":" + parts[1];
-                    try {
-                        meta = Integer.parseInt(parts[2]);
-                    } catch (NumberFormatException ignored) {}
-                }
-                
-                Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(regName));
-                if (item == null) continue;
+                String key = unlockedItems.get(i);
                 
                 int gridIndex = i - startIndex;
                 int row = gridIndex / ITEMS_PER_ROW;
@@ -346,7 +305,7 @@ public class JourneyModeScreen extends GuiContainer {
                 int itemY = y + 18 + row * 18;
 
                 if (mouseX >= itemX && mouseX < itemX + 16 && mouseY >= itemY && mouseY < itemY + 16) {
-                    ItemStack stack = new ItemStack(item, 1, meta);
+                    ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
                     this.renderToolTip(stack, mouseX, mouseY);
                     break;
                 }

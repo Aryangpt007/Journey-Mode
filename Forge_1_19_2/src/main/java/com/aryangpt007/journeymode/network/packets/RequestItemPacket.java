@@ -48,11 +48,10 @@ public class RequestItemPacket {
             ServerPlayer serverPlayer = ctx.get().getSender();
             if (serverPlayer != null) {
                 serverPlayer.getCapability(JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY).ifPresent(journeyData -> {
-                    ResourceLocation itemResourceLocation = new ResourceLocation(msg.itemId);
-                    Item item = Registry.ITEM.get(itemResourceLocation);
+                    ItemStack stack = com.aryangpt007.journeymode.data.JourneyDataAttachment.itemStackFromKey(msg.itemId);
                     
-                    if (item != null && journeyData.isUnlocked(item)) {
-                        ItemStack stack = new ItemStack(item, Math.min(msg.count, 64));
+                    if (!stack.isEmpty() && journeyData.isUnlocked(msg.itemId)) {
+                        stack.setCount(Math.min(msg.count, 64));
                         
                         // Try to add to inventory, if full drop on ground
                         if (!serverPlayer.getInventory().add(stack)) {

@@ -51,39 +51,26 @@ public class RequestItemPacket implements IMessage {
                 if (player != null) {
                     IJourneyData journeyData = player.getCapability(JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY, null);
                     if (journeyData != null) {
-                        String[] parts = message.itemId.split(":");
-                        String regName = message.itemId;
-                        int meta = 0;
-                        if (parts.length > 2) {
-                            regName = parts[0] + ":" + parts[1];
-                            try {
-                                meta = Integer.parseInt(parts[2]);
-                            } catch (NumberFormatException ignored) {}
-                        }
+                        ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(message.itemId);
                         
-                        ResourceLocation itemLoc = new ResourceLocation(regName);
-                        Item item = ForgeRegistries.ITEMS.getValue(itemLoc);
-                        
-                        if (item != null) {
-                            ItemStack stack = new ItemStack(item, Math.min(message.count, 64), meta);
-                            if (journeyData.isUnlocked(stack)) {
-                                if (!player.inventory.addItemStackToInventory(stack)) {
-                                    EntityItem entityItem = new EntityItem(
-                                        player.world,
-                                        player.posX,
-                                        player.posY,
-                                        player.posZ,
-                                        stack
-                                    );
-                                    player.world.spawnEntity(entityItem);
-                                }
-                            } else {
-                                JourneyMode.LOGGER.warn("Player {} tried to request locked or invalid item: {}", 
-                                    player.getName(), message.itemId);
+                        if (!stack.isEmpty() && journeyData.isUnlocked(message.itemId)) {
+                            stack.setCount(Math.min(message.count, 64));
+                            if (!player.inventory.addItemStackToInventory(stack)) {
+                                EntityItem entityItem = new EntityItem(
+                                    player.world,
+                                    player.posX,
+                                    player.posY,
+                                    player.posZ,
+                                    stack
+                                );
+                                player.world.spawnEntity(entityItem);
                             }
+                        } else {
+                            JourneyMode.LOGGER.warn("Player {} tried to request locked or invalid item: {}", 
+                                player.getName(), message.itemId);
+                        }
                         }
                     }
-                }
             });
             return null;
         }

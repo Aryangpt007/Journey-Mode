@@ -52,11 +52,10 @@ public class FabricNetworkHandler {
             
             server.execute(() -> {
                 JourneyDataAttachment journeyData = GlobalDataHandler.getPlayerData(player);
-                ResourceLocation itemLoc = new ResourceLocation(itemId);
-                Item item = Registry.ITEM.get(itemLoc);
+                ItemStack stack = JourneyDataAttachment.itemStackFromKey(itemId);
                 
-                if (item != null && journeyData.isUnlocked(item)) {
-                    ItemStack stack = new ItemStack(item, Math.min(count, 64));
+                if (!stack.isEmpty() && journeyData.isUnlocked(itemId)) {
+                    stack.setCount(Math.min(count, 64));
                     
                     if (!player.getInventory().add(stack)) {
                         ItemEntity entity = new ItemEntity(
