@@ -47,6 +47,13 @@ Once unlocked, pull unlimited copies from the searchable **Journey** tab. Left-c
 ## 🚀 Feature Highlights
 
 *   ✨ **Smart Research Engine** — deposit items, hit the threshold, unlock forever.
+*   👥 **Shared Team Catalogs (1.8.0+)** — `/journeymode team create|join|leave|info|kick|transfer`. Pool deposits and unlocks with your friends on a server; leaving keeps a snapshot of what the team unlocked.
+*   📥 **Deposit All (1.8.0+)** — one button deposits every already-researchable item in your main inventory; shift-click it to include your hotbar too.
+*   🔍 **Progress Tooltips (1.8.0+)** — see "37/64 researched" or "Unlocked" right on the item tooltip, no need to open the catalog.
+*   📊 **Catalog Statistics (1.8.0+)** — a dedicated Stats tab: total unlocked/researchable, % complete, per-mod breakdown, and your most recent unlock.
+*   💎 **Rarity-Aware Thresholds (1.8.0+)** — Nether Stars, Heart of the Sea, Echo Shards and other recipe-less rarities are priced for their actual scarcity, not like cobblestone.
+*   🔌 **Regex, Tags & Datapacks (1.8.0+)** — `blacklist.json`/`custom_thresholds.json` support exact IDs, item tags (`#c:ingots`), and regex/wildcard patterns; modpack authors can also ship threshold-pack datapacks. Full dev API for other mods to hook in.
+*   🔄 **Real-Time Config Sync (1.8.0+)** — server-side blacklist/threshold changes push to every connected client instantly, no restarts.
 *   ⚡ **Inventory Utilities** — _Shift-Click Dump_ discards already-unlocked junk from your inventory instantly; _Drag-to-Delete_ lets you drop a stack onto its catalog icon to void it, Terraria-style.
 *   🔍 **Searchable Dual-Tab GUI** — Deposit and Journey panels with live search and newest-first sorting.
 *   🛡️ **Server-authoritative & cheat-safe** — every unlock and retrieval is validated server-side. Hacked clients can't spawn locked items.
@@ -88,6 +95,8 @@ Your catalog is stored in one file at the root of your Minecraft installation (o
 *   **Multiplayer-safe** — entries are keyed by player UUID, so one server file cleanly tracks every player.
 *   **Admin-friendly** — edit the JSON offline to grant items, reset players, or inspect progress. Each entry tracks deposit counts, unlocked items, and unlock timestamps.
 
+> 👥 **Team catalogs work differently on purpose.** Personal progress follows you everywhere (that's the point of the global profile above), but a team's shared catalog is tied to the specific world/server it was created on, stored in that world's save folder — so "Team Alpha" on one server never bleeds into a different server or your own singleplayer world.
+
 ***
 
 ## ⚙️ Configuration
@@ -114,13 +123,38 @@ Config files generate automatically under `config/Journey Mode/` and **hot-reloa
     "minecraft:nether_star": 3,
     "minecraft:enchanted_golden_apple": 3,
     "minecraft:netherite_ingot": 5
+  },
+  "default_override": null,
+  "max_threshold_cap": 64
+}
+```
+
+**Since 1.8.0**, both files accept three key forms — checked in this order: exact item id → item tag → regex/wildcard pattern:
+
+```
+{
+  "thresholds": {
+    "minecraft:nether_star": 3,
+    "#c:ingots": 32,
+    "gtceu:.*_circuit": 4
   }
 }
 ```
 
+*   **Exact ID** always wins (`"minecraft:nether_star": 3`).
+*   **Tags** (`"#c:ingots"`) price everything in that tag at once. (1.12.2 has no vanilla tag system — tag rules there map to OreDictionary entries instead.)
+*   **Regex/wildcard** (`"gtceu:.*_circuit"`, or a plain glob like `"create:*_casing"`) catches everything else.
+*   `default_override` sets one fallback threshold for every item with no more specific rule — this is what `/journeymode all` writes.
+*   `max_threshold_cap` bounds what `/journeymode threshold` and `/journeymode all` will accept (default `64`).
+*   Modpack authors can also ship **datapack threshold packs** at `data/<namespace>/journeymode/thresholds/*.json` — no config editing required. (Not available on 1.12.2, which predates the modern data pack system.)
+*   Other mods can register their own `ThresholdProvider`/`NormalizationRule` via a small, dependency-free developer API.
+*   All config changes **push live to connected clients** — no restart, no reconnect.
+
 ***
 
 ## 📖 Commands & Controls
+
+### Everyone
 
 | Command             |Description                                              |
 | ------------------- |-------------------------------------------------------- |
@@ -128,6 +162,26 @@ Config files generate automatically under `config/Journey Mode/` and **hot-reloa
 | <code>/journeymode off</code> |Disable Journey Mode                                     |
 | <code>/journeymode status</code> |Check your current toggle state                          |
 | <code>/journeymode reset</code> |Permanently wipe your catalog and start over             |
+| <code>/journeymode tooltips on\|off</code> |Toggle the "N/threshold researched" tooltip on your own items |
+| <code>/journeymode team create &lt;name&gt;</code> |Start a team. You're the owner.                          |
+| <code>/journeymode team join &lt;name&gt;</code> |Join a team — your deposits and unlocks now pool with it |
+| <code>/journeymode team leave</code> |Leave your team, keeping a snapshot of its unlocks       |
+| <code>/journeymode team info</code> |See your team's name, member count, and unlock count     |
+| <code>/journeymode team kick &lt;player&gt;</code> |Owner-only: remove a member (must be online)             |
+| <code>/journeymode team transfer &lt;player&gt;</code> |Owner-only: hand ownership to another member (must be online) |
+
+### Server Operators
+
+| Command             |Description                                              |
+| ------------------- |-------------------------------------------------------- |
+| <code>/journeymode reloadconfig</code> |Re-read config files and re-push rules to every online client |
+| <code>/journeymode all &lt;count&gt; confirm</code> |Set a fallback threshold for every item at once (per-item overrides still win) |
+| <code>/journeymode all reset</code> |Remove the global fallback threshold                     |
+| <code>/journeymode threshold &lt;item&gt; &lt;count&gt;</code> |Fix one item's threshold on the fly                      |
+| <code>/journeymode threshold hand &lt;count&gt;</code> |Same, but targets the exact sub-type of the item in your hand (e.g. one specific potion) |
+| <code>/journeymode threshold &lt;item&gt; remove</code> |Delete a per-item threshold override                    |
+| <code>/journeymode grant &lt;player&gt; &lt;item&gt;</code> |Instantly unlock an item for a player — works even if they're offline |
+| <code>/journeymode revoke &lt;player&gt; &lt;item&gt;</code> |Take an unlock away and reset that item's progress       |
 
 **Keybind:** `J` opens the Catalog (rebindable under _Options → Controls → Key Binds → Journey Mode_).
 
@@ -165,27 +219,56 @@ Install on **both client and server** for multiplayer. Singleplayer needs only t
 
 ## 🗺️ Roadmap
 
-*   👥 **Shared Team Catalogs** — create factions or teams that pool deposits and unlocks together on multiplayer servers.
-*   🔄 **Real-Time Config Sync** — host-side blacklists and threshold overrides pushed instantly to all connected clients, no restarts.
-*   🔌 **Integration & Customization API** — deep hooks for modpack makers and mod developers:
-    *   Regex and wildcard patterns in `custom_thresholds.json` and `blacklist.json` (e.g. `"gtceu:*_circuit": 4`, `"create:.*_casing": 8`).
-    *   Item **tag**\-based threshold rules (e.g. price everything in `#forge:ingots` at once).
-    *   Datapack-driven threshold packs, so pack authors can ship balance presets without touching configs.
-    *   Developer-facing hooks for other mods to register their own threshold calculators and normalization rules for custom NBT/components.
-*   ⚔️ **Global Threshold Command** — `/journeymode all [count]` to set every item's threshold to one fixed value. Set it to 999 for a brutal grind challenge, or 1 for instant-unlock power play.
-*   🎯 **Per-Item Threshold Command** — `/journeymode threshold <item> <count>` to fix an unsatisfying threshold mid-game without leaving Minecraft (writes straight to `custom_thresholds.json` and hot-applies).
-*   🎁 **Admin Grant/Revoke** — `/journeymode grant|revoke <player> <item>` for server operators, quest-book rewards, and event integrations.
-*   💎 **Rarity-Aware Thresholds** — smarter defaults for rare uncraftables (Nether Stars, Heart of the Sea, Echo Shards) so they're no longer priced like cobblestone.
-*   📥 **Deposit All** — one button to deposit every researchable item in your inventory after a long mining trip.
-*   🔍 **Progress Tooltips** — see partial research progress ("37/64") on item tooltips and in the catalog, without needing to place the item in the deposit slot.
-*   📊 **Catalog Statistics** — collection percentages and per-mod completion tracking.
-*   🎨 **Visual Polish** — custom vanilla-styled textures, unlock sounds & particles.
+Everything that used to be on this list — Shared Team Catalogs, Real-Time Config Sync, the Integration API (regex/tags/datapacks/dev hooks), the Global/Per-Item Threshold commands, Admin Grant/Revoke, Rarity-Aware Thresholds, Deposit All, Progress Tooltips, and Catalog Statistics — **shipped in 1.8.0**. See the changelog below.
+
+What's next:
+
+*   🎒 **E-Menu Unlock Integration** — a small fetch strip and deposit slot inside your vanilla inventory (`E`) screen, additive to the existing Journey (`J`) catalog rather than replacing it.
 
 Full changelog below and on [GitHub Releases](https://github.com/Aryangpt007/Journey-Mode/releases).
 
 ***
 
 ## 📋 Changelog
+
+### Version `1.8.0` (Teams, Config Sync, Integration API & Quality-of-Life)
+
+**Release Date:** July 2026
+
+#### 👥 Shared Team Catalogs
+
+*   **Team Commands**: `/journeymode team create|join|leave|info|kick|transfer`. Both deposits and unlocks pool with your team; leaving snapshots the team's unlocks into your own personal catalog.
+*   **Per-World Team Storage**: Team progress lives in the world/server save, not the global profile — teams never leak between unrelated servers or singleplayer worlds.
+
+#### 🔄 Real-Time Config Sync & Integration API
+
+*   **Instant Config Sync**: Blacklist and threshold rule changes push to every connected client immediately — no restarts, no reconnects.
+*   **Regex, Tag & Datapack Rules**: `blacklist.json`/`custom_thresholds.json` accept exact IDs, item tags (`#c:ingots`), and regex/wildcard patterns. Modpack authors can also ship threshold-pack datapacks without touching configs.
+*   **Developer API**: A small, dependency-free API (`ThresholdProvider`, `NormalizationRule`) lets other mods register custom thresholds and NBT/component normalization rules.
+
+#### ⚙️ New Commands
+
+*   `/journeymode all <count> confirm` / `all reset` — set (or clear) a global fallback threshold for every item.
+*   `/journeymode threshold <item|hand> <count>` / `threshold <item> remove` — fix an individual item's threshold on the fly, with a `hand` variant for exact potion/enchanted-book sub-types.
+*   `/journeymode grant|revoke <player> <item|hand>` — admin-grant or revoke unlocks, works on offline players.
+*   `/journeymode tooltips on|off` — per-player toggle for the new progress tooltips.
+*   `/journeymode reloadconfig` — re-read config files and re-sync all clients.
+
+#### 🎁 Quality-of-Life
+
+*   **Deposit All**: One button deposits every already-researchable item in your main inventory; shift-click to include your hotbar too.
+*   **Progress Tooltips**: See "37/64 researched" or "Unlocked" directly on item tooltips.
+*   **Catalog Statistics**: A new Stats tab — total unlocked/researchable, % complete, per-mod breakdown, and your most recent unlock.
+*   **Rarity-Aware Thresholds**: Recipe-less rare items (Nether Stars, Heart of the Sea, Echo Shards, etc.) now cost far less than common raw materials of the same stack size.
+*   **Unlock Feedback**: An on-screen message when you cross a research threshold.
+
+#### 🛠️ Fixes
+
+*   **Modded Stack-Size Bug**: Fixed thresholds for recipe-less items being inflated to absurd values (observed: 9,999) by mods that increase max stack sizes.
+*   **Search Bar Keybind Leak**: Typing "E" (or other letter keys bound to vanilla keybinds) while searching the catalog no longer closes the GUI mid-type.
+*   **Deposit-All Button Overlap** and **garbled tooltip text** on certain versions, both resolved.
+
+**Universal Fix**: All of the above applied across all 9 target loader/version configurations.
 
 ### Version `1.7.1` (Subtype-Aware Research)
 
@@ -266,7 +349,7 @@ Full changelog below and on [GitHub Releases](https://github.com/Aryangpt007/Jou
 
 *   **Source:** [GitHub — Aryangpt007/Journey-Mode](https://github.com/Aryangpt007/Journey-Mode)
 *   **Bug reports & feature requests:** [Issue Tracker](https://github.com/Aryangpt007/Journey-Mode/issues)
-*   **Also on:** [Modrinth](https://modrinth.com/mod/journey-mode)
+*   **Also on:** [Modrinth](https://modrinth.com/mod/journey-mode) · CurseForge <!-- TODO: add your CurseForge project URL here, I couldn't verify the exact slug via API -->
 *   **License:** MIT
 
 **Created by Aryangpt007** • Made with ❤️ for the Minecraft community.
