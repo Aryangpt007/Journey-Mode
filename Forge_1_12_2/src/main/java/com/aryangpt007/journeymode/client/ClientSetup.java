@@ -27,6 +27,9 @@ public class ClientSetup {
 
         // Register client tick event listener
         MinecraftForge.EVENT_BUS.register(new ClientKeyHandler());
+
+        // Register progress tooltip handler (§9)
+        MinecraftForge.EVENT_BUS.register(new TooltipHandler());
     }
 
     public static class ClientKeyHandler {

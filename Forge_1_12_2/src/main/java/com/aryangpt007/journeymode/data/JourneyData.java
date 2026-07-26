@@ -22,7 +22,17 @@ public class JourneyData implements IJourneyData {
     private final Set<String> unlockedItems;
     private final Map<String, Long> unlockTimestamps;
     private boolean enabled;
-    
+    private boolean showTooltips = true; // Per-player tooltip display preference (/journeymode tooltips)
+    private String teamId; // null = no team; see TeamDataHandler for the per-world team registry
+    // Client-display-only: the team's human-readable name, refreshed on every sync. Never
+    // persisted (recomputed from the server each time) - unlike teamId, which IS persisted and
+    // drives server-side deposit/fetch routing.
+    private String teamDisplayName;
+
+    // Section 11 Visual Polish state - client-side only, never persisted.
+    private boolean hasSyncedOnce = false;
+    private Set<String> pendingUnlockCelebration = Collections.emptySet();
+
     public static final int UNLOCK_THRESHOLD = 30;
     private final RecipeDepthCalculator recipeCalculator;
 
@@ -51,7 +61,11 @@ public class JourneyData implements IJourneyData {
         json.add("unlock_timestamps", timestampsJson);
         
         json.addProperty("enabled", enabled);
-        
+        json.addProperty("show_tooltips", showTooltips);
+        if (teamId != null) {
+            json.addProperty("team_id", teamId);
+        }
+
         return GSON.toJson(json);
     }
 
@@ -83,6 +97,14 @@ public class JourneyData implements IJourneyData {
             
             if (json.has("enabled")) {
                 data.enabled = json.get("enabled").getAsBoolean();
+            }
+
+            if (json.has("show_tooltips")) {
+                data.showTooltips = json.get("show_tooltips").getAsBoolean();
+            } // else: absent in old files - keep the default (true), no data loss either way
+
+            if (json.has("team_id") && !json.get("team_id").isJsonNull()) {
+                data.teamId = json.get("team_id").getAsString();
             }
         } catch (Exception e) {
             // Keep defaults
@@ -122,6 +144,18 @@ public class JourneyData implements IJourneyData {
         } else {
             enabled = true;
         }
+
+        if (nbt.hasKey("show_tooltips")) {
+            showTooltips = nbt.getBoolean("show_tooltips");
+        } else {
+            showTooltips = true; // absent in old data - never break old saves
+        }
+
+        if (nbt.hasKey("team_id")) {
+            teamId = nbt.getString("team_id");
+        } else {
+            teamId = null; // absent in old data - never break old saves
+        }
     }
 
     @Override
@@ -147,6 +181,10 @@ public class JourneyData implements IJourneyData {
         nbt.setTag("unlock_timestamps", timestamps);
         
         nbt.setBoolean("enabled", enabled);
+        nbt.setBoolean("show_tooltips", showTooltips);
+        if (teamId != null) {
+            nbt.setString("team_id", teamId);
+        }
         return nbt;
     }
 
@@ -181,7 +219,16 @@ public class JourneyData implements IJourneyData {
                 normalizedTag.setTag("Effects", originalTag.getTag("Effects"));
                 hasSubtype = true;
             }
-            
+
+            // Third-party NormalizationRules may contribute additional keys (denylisted
+            // container/block-entity keys are stripped inside the API before this returns).
+            for (String key : com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationKeys(originalTag)) {
+                if (originalTag.hasKey(key)) {
+                    normalizedTag.setTag(key, originalTag.getTag(key));
+                    hasSubtype = true;
+                }
+            }
+
             if (hasSubtype) {
                 normalized.setTagCompound(normalizedTag);
             }
@@ -358,12 +405,51 @@ public class JourneyData implements IJourneyData {
 
     @Override
     public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps) {
+        // Section 11 Visual Polish: remember which keys are newly-unlocked-since-last-sync so
+        // the client can play a sound/show a message on the transition, without needing a
+        // dedicated "newly_unlocked" packet field - the full unlocked set is already synced
+        // every time. The very first sync after connecting (client capability starts empty)
+        // must be silent, or every already-unlocked item would "celebrate" on login.
+        if (hasSyncedOnce) {
+            Set<String> newKeys = new HashSet<>(unlocked);
+            newKeys.removeAll(this.unlockedItems);
+            this.pendingUnlockCelebration = newKeys;
+        } else {
+            this.pendingUnlockCelebration = Collections.emptySet();
+            this.hasSyncedOnce = true;
+        }
+
         this.collectedCounts.clear();
         this.collectedCounts.putAll(counts);
         this.unlockedItems.clear();
         this.unlockedItems.addAll(unlocked);
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(timestamps);
+    }
+
+    @Override
+    public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps, boolean enabled, boolean showTooltips) {
+        updateFromSync(counts, unlocked, timestamps);
+        this.enabled = enabled;
+        this.showTooltips = showTooltips;
+    }
+
+    @Override
+    public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps, boolean enabled, boolean showTooltips, String teamDisplayName) {
+        updateFromSync(counts, unlocked, timestamps, enabled, showTooltips);
+        this.teamDisplayName = (teamDisplayName == null || teamDisplayName.isEmpty()) ? null : teamDisplayName;
+    }
+
+    @Override
+    public String getTeamDisplayName() {
+        return teamDisplayName;
+    }
+
+    @Override
+    public Set<String> getAndClearNewlyUnlocked() {
+        Set<String> result = pendingUnlockCelebration;
+        pendingUnlockCelebration = Collections.emptySet();
+        return result;
     }
 
     @Override
@@ -377,6 +463,26 @@ public class JourneyData implements IJourneyData {
     }
 
     @Override
+    public boolean isShowTooltips() {
+        return showTooltips;
+    }
+
+    @Override
+    public void setShowTooltips(boolean showTooltips) {
+        this.showTooltips = showTooltips;
+    }
+
+    @Override
+    public String getTeamId() {
+        return teamId;
+    }
+
+    @Override
+    public void setTeamId(String teamId) {
+        this.teamId = teamId;
+    }
+
+    @Override
     public void copyFrom(IJourneyData other) {
         this.collectedCounts.clear();
         this.collectedCounts.putAll(other.getAllCollectedCounts());
@@ -385,6 +491,8 @@ public class JourneyData implements IJourneyData {
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(other.getUnlockTimestamps());
         this.enabled = other.isEnabled();
+        this.showTooltips = other.isShowTooltips();
+        this.teamId = other.getTeamId();
     }
 
     @Override
@@ -392,5 +500,32 @@ public class JourneyData implements IJourneyData {
         this.collectedCounts.clear();
         this.unlockedItems.clear();
         this.unlockTimestamps.clear();
+    }
+
+    @Override
+    public void grant(String key) {
+        unlockedItems.add(key);
+        unlockTimestamps.put(key, System.currentTimeMillis());
+    }
+
+    @Override
+    public void revoke(String key) {
+        unlockedItems.remove(key);
+        unlockTimestamps.remove(key);
+        collectedCounts.put(key, 0);
+    }
+
+    @Override
+    public void checkPendingUnlocks() {
+        for (Map.Entry<String, Integer> entry : new HashMap<>(collectedCounts).entrySet()) {
+            String key = entry.getKey();
+            if (unlockedItems.contains(key)) continue;
+            ItemStack stack = itemStackFromKey(key);
+            if (stack.isEmpty()) continue;
+            if (entry.getValue() >= getThreshold(stack.getItem())) {
+                unlockedItems.add(key);
+                unlockTimestamps.put(key, System.currentTimeMillis());
+            }
+        }
     }
 }

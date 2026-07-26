@@ -6,7 +6,6 @@ import com.aryangpt007.journeymode.data.JourneyDataAttachment;
 import com.aryangpt007.journeymode.data.GlobalDataHandler;
 import com.aryangpt007.journeymode.network.packets.SubmitDepositPacket;
 import com.aryangpt007.journeymode.network.FabricNetworkHandler;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -21,6 +20,7 @@ import net.minecraft.world.item.ItemStack;
  */
 public class JourneyModeMenu extends AbstractContainerMenu {
     private final Player player;
+    private final Inventory playerInventoryRef;
     private final JourneyDataAttachment journeyData;
     private boolean depositSlotEnabled = true;
     private boolean inJourneyTab = false;
@@ -84,6 +84,7 @@ public class JourneyModeMenu extends AbstractContainerMenu {
     public JourneyModeMenu(int containerId, Inventory playerInventory) {
         super(JourneyMode.JOURNEY_MODE_MENU, containerId);
         this.player = playerInventory.player;
+        this.playerInventoryRef = playerInventory;
         this.journeyData = GlobalDataHandler.getPlayerData(player);
 
         // Add deposit slot (center top of screen)
@@ -117,56 +118,138 @@ public class JourneyModeMenu extends AbstractContainerMenu {
     public void slotsChanged(Container container) {
         super.slotsChanged(container);
     }
-    
+
+    /**
+     * §1 Shared Team Catalogs: if this player is on a team, deposits/unlocks/progress-checks
+     * resolve against the team's shared TeamData instead of their personal JourneyDataAttachment
+     * - both deposits and unlocks pool, per the resolved design decision. Returns null if the
+     * player isn't on a team (the common case), so call sites fall back to personal data.
+     */
+    private com.aryangpt007.journeymode.data.TeamData resolveTeam() {
+        if (journeyData.getTeamId() == null) return null;
+        return com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(player.getUUID()).orElse(null);
+    }
+
     public void processDeposit() {
         if (player.level().isClientSide) return;
-        
+
         ItemStack stack = depositSlot.getItem(0);
         if (!stack.isEmpty()) {
-            String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-            if (ConfigHandler.isBlacklisted(itemId)) {
+            if (ConfigHandler.isBlacklisted(stack.getItem())) {
                 player.displayClientMessage(
                     JourneyMode.translatable("blacklist_message", stack.getHoverName()),
                     false
                 );
                 return;
             }
-            
-            if (journeyData.isUnlocked(stack, player.level().registryAccess())) {
+
+            com.aryangpt007.journeymode.data.TeamData team = resolveTeam();
+
+            // Check if already unlocked (team-wide if on a team, personal otherwise)
+            boolean alreadyUnlocked = team != null
+                ? team.isUnlocked(stack, player.level().registryAccess())
+                : journeyData.isUnlocked(stack, player.level().registryAccess());
+            if (alreadyUnlocked) {
                 player.displayClientMessage(
                     Component.literal("§e" + stack.getHoverName().getString() + " is already unlocked!"),
                     false
                 );
                 return;
             }
-            
-            boolean unlocked = journeyData.depositItem(
-                stack.copy(), 
-                player.level().getRecipeManager(),
-                player.level().registryAccess()
-            );
+
+            boolean unlocked = team != null
+                ? team.depositItem(stack.copy(), player.level().getRecipeManager(), player.level().registryAccess())
+                : journeyData.depositItem(stack.copy(), player.level().getRecipeManager(), player.level().registryAccess());
             depositSlot.setItem(0, ItemStack.EMPTY);
-            
-            int threshold = journeyData.getThreshold(stack.getItem());
-            
+
+            int threshold = journeyData.getThreshold(stack.getItem()); // item-based only, same regardless of team
+
             if (unlocked) {
                 player.displayClientMessage(
                     JourneyMode.translatable("unlock_message", stack.getHoverName(), threshold),
                     false
                 );
             } else {
-                int progress = journeyData.getProgress(stack, player.level().registryAccess());
-                int collected = journeyData.getCollectedCount(stack, player.level().registryAccess());
+                int progress = team != null ? team.getProgress(stack, player.level().registryAccess()) : journeyData.getProgress(stack, player.level().registryAccess());
+                int collected = team != null ? team.getCollectedCount(stack, player.level().registryAccess()) : journeyData.getCollectedCount(stack, player.level().registryAccess());
                 player.displayClientMessage(
                     JourneyMode.translatable("deposit_message", stack.getCount(), stack.getHoverName(), collected, threshold, progress),
                     true
                 );
             }
-            
+
             if (player instanceof ServerPlayer serverPlayer) {
                 GlobalDataHandler.syncToClient(serverPlayer, journeyData);
                 GlobalDataHandler.savePlayerUnlocks(serverPlayer, journeyData);
+                if (team != null) {
+                    com.aryangpt007.journeymode.data.TeamDataHandler.saveAfterDeposit(serverPlayer.getServer());
+                }
             }
+        }
+    }
+
+    /**
+     * §8 Deposit All: main inventory only (slots 9-35) by default; hotbar (0-8) included only
+     * when the player held shift when clicking the button. Armor/offhand are never touched -
+     * they aren't part of Inventory.items at all, so they're excluded by construction, not by
+     * a special-case check. Already-unlocked item types are skipped (their deposit is wasted).
+     */
+    public void processDepositAll(boolean includeHotbar) {
+        if (player.level().isClientSide) return;
+        if (!(player instanceof ServerPlayer serverPlayer)) return;
+
+        int firstSlot = includeHotbar ? 0 : 9;
+        int lastSlotExclusive = 36;
+
+        com.aryangpt007.journeymode.data.TeamData team = resolveTeam();
+
+        int typesDeposited = 0;
+        int itemsDeposited = 0;
+        int typesSkippedUnlocked = 0;
+
+        for (int i = firstSlot; i < lastSlotExclusive; i++) {
+            ItemStack stack = playerInventoryRef.getItem(i);
+            if (stack.isEmpty()) continue;
+
+            if (ConfigHandler.isBlacklisted(stack.getItem())) continue;
+
+            boolean alreadyUnlocked = team != null
+                ? team.isUnlocked(stack, player.level().registryAccess())
+                : journeyData.isUnlocked(stack, player.level().registryAccess());
+            if (alreadyUnlocked) {
+                typesSkippedUnlocked++;
+                continue;
+            }
+
+            boolean unlocked = team != null
+                ? team.depositItem(stack.copy(), player.level().getRecipeManager(), player.level().registryAccess())
+                : journeyData.depositItem(stack.copy(), player.level().getRecipeManager(), player.level().registryAccess());
+            itemsDeposited += stack.getCount();
+            typesDeposited++;
+            playerInventoryRef.setItem(i, ItemStack.EMPTY);
+
+            if (unlocked) {
+                int threshold = journeyData.getThreshold(stack.getItem());
+                player.displayClientMessage(
+                    JourneyMode.translatable("unlock_message", stack.getHoverName(), threshold),
+                    false
+                );
+            }
+        }
+
+        if (typesDeposited == 0 && typesSkippedUnlocked == 0) {
+            player.displayClientMessage(Component.literal("Nothing to deposit."), true);
+        } else {
+            player.displayClientMessage(Component.literal(
+                "Deposited " + itemsDeposited + " items across " + typesDeposited + " types. " +
+                "Skipped " + typesSkippedUnlocked + " unlocked types."
+            ), false);
+        }
+
+        GlobalDataHandler.syncToClient(serverPlayer, journeyData);
+        GlobalDataHandler.savePlayerUnlocks(serverPlayer, journeyData);
+        if (team != null) {
+            com.aryangpt007.journeymode.data.TeamDataHandler.saveAfterDeposit(serverPlayer.getServer());
         }
     }
 
@@ -180,7 +263,11 @@ public class JourneyModeMenu extends AbstractContainerMenu {
             itemstack = slotStack.copy();
 
             if (this.inJourneyTab) {
-                if (this.journeyData.isUnlocked(slotStack, player.level().registryAccess())) {
+                com.aryangpt007.journeymode.data.TeamData team = resolveTeam();
+                boolean unlocked = team != null
+                    ? team.isUnlocked(slotStack, player.level().registryAccess())
+                    : this.journeyData.isUnlocked(slotStack, player.level().registryAccess());
+                if (unlocked) {
                     slot.set(ItemStack.EMPTY);
                     slot.setChanged();
                     return ItemStack.EMPTY;

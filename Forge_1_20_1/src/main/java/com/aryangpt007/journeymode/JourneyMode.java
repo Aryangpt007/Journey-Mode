@@ -74,7 +74,7 @@ public class JourneyMode {
     }
 
     private void registerCommands(RegisterCommandsEvent event) {
-        JourneyModeCommand.register(event.getDispatcher());
+        JourneyModeCommand.register(event.getDispatcher(), event.getBuildContext());
     }
 
     public static Component translatable(String key, Object... args) {

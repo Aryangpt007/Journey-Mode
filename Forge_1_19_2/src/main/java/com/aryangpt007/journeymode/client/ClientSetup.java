@@ -37,6 +37,9 @@ public class ClientSetup {
 
         // Register client-side key handler
         MinecraftForge.EVENT_BUS.register(ClientKeyHandler.class);
+
+        // Register progress tooltip handler (§9)
+        MinecraftForge.EVENT_BUS.register(TooltipHandler.class);
     }
     
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
@@ -66,7 +69,7 @@ public class ClientSetup {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
             mc.player.getCapability(com.aryangpt007.journeymode.data.JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY).ifPresent(data -> {
-                data.updateFromSync(msg.getCollectedCounts(), msg.getUnlockedItems(), msg.getUnlockTimestamps());
+                data.updateFromSync(msg.getCollectedCounts(), msg.getUnlockedItems(), msg.getUnlockTimestamps(), msg.isEnabled(), msg.isShowTooltips());
             });
         }
     }

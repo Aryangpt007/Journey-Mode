@@ -49,8 +49,17 @@ public class RequestItemPacket {
             if (serverPlayer != null) {
                 serverPlayer.getCapability(JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY).ifPresent(journeyData -> {
                     ItemStack stack = com.aryangpt007.journeymode.data.JourneyDataAttachment.itemStackFromKey(msg.itemId);
-                    
-                    if (!stack.isEmpty() && journeyData.isUnlocked(msg.itemId)) {
+
+                    // §1 Shared Team Catalogs: unlock check must follow the same team-or-personal
+                    // resolution as everywhere else - a team member can fetch anything the TEAM
+                    // unlocked, not just their own personal unlocks. This is the anti-cheat
+                    // boundary (server is authoritative), so getting this branch right matters.
+                    boolean unlocked = journeyData.getTeamId() != null
+                        ? com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(serverPlayer.getUUID())
+                            .map(team -> team.isUnlocked(msg.itemId)).orElse(false)
+                        : journeyData.isUnlocked(msg.itemId);
+
+                    if (!stack.isEmpty() && unlocked) {
                         stack.setCount(Math.min(msg.count, 64));
                         
                         // Try to add to inventory, if full drop on ground

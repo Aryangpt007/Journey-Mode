@@ -27,9 +27,12 @@ public class ClientSetup {
     
     public static void onClientSetup(FMLClientSetupEvent event) {
         JourneyMode.LOGGER.info("Journey Mode client setup");
-        
+
         // Register client-side key handler
         NeoForge.EVENT_BUS.register(ClientKeyHandler.class);
+
+        // Register progress tooltip handler (§9)
+        NeoForge.EVENT_BUS.register(TooltipHandler.class);
     }
     
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
@@ -54,6 +57,27 @@ public class ClientSetup {
                 // Key was just pressed
                 PacketDistributor.sendToServer(new OpenJourneyMenuPacket());
             }
+        }
+    }
+
+    /**
+     * §11 Visual Polish: unlock sound + action-bar message on threshold crossing, driven purely
+     * by client-side diffing (see JourneyDataAttachment.updateFromSync) - no dedicated
+     * "newly_unlocked" packet field needed. A full graphical toast (with custom textures) is
+     * deliberately out of scope for this pass - there's no art-asset pipeline in play here, so
+     * this uses the same action-bar message style the rest of the mod already uses.
+     */
+    public static void celebrateNewUnlocks(java.util.Set<String> newlyUnlocked) {
+        Minecraft mc = Minecraft.getInstance();
+        if (newlyUnlocked.isEmpty() || mc.player == null) return;
+
+        if (newlyUnlocked.size() == 1) {
+            String key = newlyUnlocked.iterator().next();
+            net.minecraft.world.item.ItemStack stack = com.aryangpt007.journeymode.data.JourneyDataAttachment.itemStackFromKey(key, mc.level.registryAccess());
+            String name = stack.isEmpty() ? key : stack.getHoverName().getString();
+            mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("§6Unlocked: " + name + "!"), true);
+        } else {
+            mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("§6Unlocked " + newlyUnlocked.size() + " items!"), true);
         }
     }
 }

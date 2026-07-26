@@ -30,6 +30,9 @@ public class JourneyModeClient implements ClientModInitializer {
         // Register client receivers
         FabricNetworkHandler.registerClient();
 
+        // §9 progress tooltips - purely client-side, zero new packets
+        TooltipHandler.register();
+
         // Register client tick events
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player != null) {

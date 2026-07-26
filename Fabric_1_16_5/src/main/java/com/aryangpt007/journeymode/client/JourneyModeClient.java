@@ -6,6 +6,7 @@ import com.aryangpt007.journeymode.network.FabricNetworkHandler;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
 import net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry;
@@ -29,6 +30,9 @@ public class JourneyModeClient implements ClientModInitializer {
 
         // Register client receivers
         FabricNetworkHandler.registerClient();
+
+        // Register progress tooltip handler (§9)
+        ItemTooltipCallback.EVENT.register(TooltipHandler::onItemTooltip);
 
         // Register client tick events
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

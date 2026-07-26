@@ -16,17 +16,33 @@ public class SyncJourneyDataPacket implements IMessage {
     private Map<String, Integer> collectedCounts;
     private Set<String> unlockedItems;
     private Map<String, Long> unlockTimestamps;
+    private boolean enabled;
+    private boolean showTooltips;
+    private String teamDisplayName; // empty string = no team
 
     public SyncJourneyDataPacket() {
         this.collectedCounts = new HashMap<>();
         this.unlockedItems = new HashSet<>();
         this.unlockTimestamps = new HashMap<>();
+        this.enabled = true;
+        this.showTooltips = true;
+        this.teamDisplayName = "";
     }
 
-    public SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps) {
+    /**
+     * §2/§3: carries `enabled`/`showTooltips` too - the old 3-argument-equivalent shape never
+     * did, so the client's own capability instance (a separate object from the server's, even in
+     * singleplayer) silently never reflected /journeymode off or a tooltip preference change.
+     * §1 Shared Team Catalogs: also carries the team's display name for the client-side badge -
+     * empty string means "not on a team".
+     */
+    public SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled, boolean showTooltips, String teamDisplayName) {
         this.collectedCounts = collectedCounts;
         this.unlockedItems = unlockedItems;
         this.unlockTimestamps = unlockTimestamps;
+        this.enabled = enabled;
+        this.showTooltips = showTooltips;
+        this.teamDisplayName = teamDisplayName == null ? "" : teamDisplayName;
     }
 
     @Override
@@ -38,18 +54,22 @@ public class SyncJourneyDataPacket implements IMessage {
             for (int i = 0; i < collectedSize; i++) {
                 collectedCounts.put(packetBuffer.readString(32767), packetBuffer.readInt());
             }
-            
+
             int unlockedSize = packetBuffer.readInt();
             unlockedItems = new HashSet<>();
             for (int i = 0; i < unlockedSize; i++) {
                 unlockedItems.add(packetBuffer.readString(32767));
             }
-            
+
             int timestampsSize = packetBuffer.readInt();
             unlockTimestamps = new HashMap<>();
             for (int i = 0; i < timestampsSize; i++) {
                 unlockTimestamps.put(packetBuffer.readString(32767), packetBuffer.readLong());
             }
+
+            enabled = packetBuffer.readBoolean();
+            showTooltips = packetBuffer.readBoolean();
+            teamDisplayName = packetBuffer.readString(32767);
         } catch (Exception ignored) {}
     }
 
@@ -70,6 +90,9 @@ public class SyncJourneyDataPacket implements IMessage {
             packetBuffer.writeString(entry.getKey());
             packetBuffer.writeLong(entry.getValue());
         }
+        packetBuffer.writeBoolean(enabled);
+        packetBuffer.writeBoolean(showTooltips);
+        packetBuffer.writeString(teamDisplayName);
     }
 
     public static class Handler implements IMessageHandler<SyncJourneyDataPacket, IMessage> {
@@ -86,10 +109,33 @@ public class SyncJourneyDataPacket implements IMessage {
                 if (player != null) {
                     IJourneyData data = player.getCapability(JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY, null);
                     if (data != null) {
-                        data.updateFromSync(message.collectedCounts, message.unlockedItems, message.unlockTimestamps);
+                        data.updateFromSync(message.collectedCounts, message.unlockedItems, message.unlockTimestamps, message.enabled, message.showTooltips, message.teamDisplayName);
+                        celebrateNewUnlocks(player, data.getAndClearNewlyUnlocked());
                     }
                 }
             });
+        }
+
+        /**
+         * §11 Visual Polish: unlock sound + action-bar message on threshold crossing, driven
+         * purely by client-side diffing (see JourneyData.updateFromSync) - no dedicated
+         * "newly_unlocked" packet field needed. A full graphical toast (with custom textures) is
+         * deliberately out of scope for this pass - there's no art-asset pipeline in play here,
+         * so this uses the same action-bar message style the rest of the mod already uses. No
+         * unicode symbols in the message text (matches the mojibake fix elsewhere in this mod).
+         */
+        @SideOnly(Side.CLIENT)
+        private void celebrateNewUnlocks(net.minecraft.client.entity.EntityPlayerSP player, Set<String> newlyUnlocked) {
+            if (newlyUnlocked.isEmpty()) return;
+
+            if (newlyUnlocked.size() == 1) {
+                String key = newlyUnlocked.iterator().next();
+                net.minecraft.item.ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
+                String name = stack.isEmpty() ? key : stack.getDisplayName();
+                player.sendStatusMessage(new net.minecraft.util.text.TextComponentString("§6Unlocked: " + name + "!"), true);
+            } else {
+                player.sendStatusMessage(new net.minecraft.util.text.TextComponentString("§6Unlocked " + newlyUnlocked.size() + " items!"), true);
+            }
         }
     }
 }

@@ -70,6 +70,11 @@ public class JourneyMode {
     public void serverStarting(FMLServerStartingEvent event) {
         LOGGER.info("Registering Journey Mode commands...");
         event.registerServerCommand(new JourneyModeCommand());
+
+        // §1 Shared Team Catalogs: (re)load the per-world teams file for this session, clearing
+        // any previous world's cache - a singleplayer client that switches worlds must never see
+        // a different world's teams.
+        com.aryangpt007.journeymode.data.TeamDataHandler.load(event.getServer());
     }
 
     public static ITextComponent translatable(String key, Object... args) {

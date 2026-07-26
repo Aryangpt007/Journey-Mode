@@ -7,6 +7,7 @@ import com.aryangpt007.journeymode.data.JourneyDataAttachment;
 import com.aryangpt007.journeymode.menu.JourneyModeMenu;
 import com.aryangpt007.journeymode.network.NetworkHandler;
 import com.aryangpt007.journeymode.network.packets.DeleteCarriedPacket;
+import com.aryangpt007.journeymode.network.packets.DepositAllPacket;
 import com.aryangpt007.journeymode.network.packets.RequestItemPacket;
 import com.aryangpt007.journeymode.network.packets.SyncTabPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -20,6 +21,7 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,9 +35,19 @@ public class JourneyModeScreen extends ContainerScreen<JourneyModeMenu> {
     
     private enum Tab {
         DEPOSIT,
-        JOURNEY
+        JOURNEY,
+        STATS
     }
-    
+
+    // Shared by both rendering and click-hit-testing so the two can never drift apart (a
+    // previous mismatch here is what caused the Deposit-All button to overlap other text).
+    private static final int TAB_WIDTH = 54;
+    private static final int TAB_HEIGHT = 20;
+    private static final int TAB_Y_OFFSET = -20;
+    private static final int DEPOSIT_TAB_X = 6;
+    private static final int JOURNEY_TAB_X = 64;
+    private static final int STATS_TAB_X = 122;
+
     private Tab currentTab = Tab.DEPOSIT;
     private int scrollOffset = 0;
     private static final int ITEMS_PER_ROW = 9;
@@ -43,6 +55,12 @@ public class JourneyModeScreen extends ContainerScreen<JourneyModeMenu> {
     
     private TextFieldWidget searchBox;
     private String searchQuery = "";
+
+    // §8 Deposit All: click once to arm, click again within the window to actually deposit -
+    // a lightweight stand-in for a full confirmation dialog, since this action is destructive.
+    private boolean depositAllArmed = false;
+    private long depositAllArmedUntil = 0L;
+    private static final long DEPOSIT_ALL_CONFIRM_WINDOW_MS = 3000L;
 
     public JourneyModeScreen(JourneyModeMenu menu, PlayerInventory playerInventory, ITextComponent title) {
         super(menu, playerInventory, title);
@@ -106,13 +124,23 @@ public class JourneyModeScreen extends ContainerScreen<JourneyModeMenu> {
         fill(matrixStack, x + 1, y + 1, x + this.imageWidth - 1, y + this.imageHeight - 1, 0xFF8B8B8B);
 
         // Draw tabs
-        drawTab(matrixStack, x + 10, y - 20, "Deposit", currentTab == Tab.DEPOSIT);
-        drawTab(matrixStack, x + 80, y - 20, "Journey", currentTab == Tab.JOURNEY);
+        drawTab(matrixStack, x + DEPOSIT_TAB_X, y + TAB_Y_OFFSET, "Deposit", currentTab == Tab.DEPOSIT);
+        drawTab(matrixStack, x + JOURNEY_TAB_X, y + TAB_Y_OFFSET, "Journey", currentTab == Tab.JOURNEY);
+        drawTab(matrixStack, x + STATS_TAB_X, y + TAB_Y_OFFSET, "Stats", currentTab == Tab.STATS);
+
+        // §1 Shared Team Catalogs: badge drawn above the tabs so it never competes with any
+        // existing tab-body layout (that's exactly where the Deposit-All overlap bug came from).
+        String teamName = this.menu.getJourneyData().getTeamDisplayName();
+        if (teamName != null) {
+            this.font.draw(matrixStack, "Team: " + teamName, x + DEPOSIT_TAB_X, y + TAB_Y_OFFSET - 10, 0xFFFFFF55);
+        }
 
         if (currentTab == Tab.DEPOSIT) {
             renderDepositTab(matrixStack, x, y);
-        } else {
+        } else if (currentTab == Tab.JOURNEY) {
             renderJourneyTab(matrixStack, x, y, mouseX, mouseY);
+        } else {
+            renderStatsTab(matrixStack, x, y);
         }
         
         // Draw inventory slot backgrounds
@@ -156,8 +184,8 @@ public class JourneyModeScreen extends ContainerScreen<JourneyModeMenu> {
     private void drawTab(MatrixStack matrixStack, int x, int y, String label, boolean selected) {
         int color = selected ? 0xFFFFFFFF : 0xFFA0A0A0;
         int bgColor = selected ? 0xFF8B8B8B : 0xFF606060;
-        
-        fill(matrixStack, x, y, x + 60, y + 20, bgColor);
+
+        fill(matrixStack, x, y, x + TAB_WIDTH, y + TAB_HEIGHT, bgColor);
         this.font.draw(matrixStack, label, x + 5, y + 6, color);
     }
 
@@ -202,7 +230,7 @@ public class JourneyModeScreen extends ContainerScreen<JourneyModeMenu> {
                 boolean alreadyUnlocked = data.isUnlocked(slotItem);
                 
                 if (alreadyUnlocked) {
-                    this.font.draw(matrixStack, "§a✓ Already Unlocked!", x + 8, infoY, 0x00FF00);
+                    this.font.draw(matrixStack, "§aAlready Unlocked!", x + 8, infoY, 0x00FF00);
                 } else {
                     this.font.draw(matrixStack, "Required: " + threshold + " items", x + 8, infoY, 0x404040);
                     this.font.draw(matrixStack, "Collected: " + collected + "/" + threshold, x + 8, infoY + 12, 0x404040);
@@ -214,6 +242,80 @@ public class JourneyModeScreen extends ContainerScreen<JourneyModeMenu> {
         } else {
             // General info when no item
             this.font.draw(matrixStack, "Unlocked: " + data.getUnlockedItems().size() + " items", x + 8, infoY, 0x404040);
+        }
+
+        renderDepositAllButton(matrixStack, x, y);
+    }
+
+    private void renderDepositAllButton(MatrixStack matrixStack, int x, int y) {
+        if (depositAllArmed && System.currentTimeMillis() > depositAllArmedUntil) {
+            depositAllArmed = false;
+        }
+
+        int buttonX = x + 8;
+        int buttonY = y + 80; // clear of the 3-line info block (infoY=y+42 .. y+66, ~10px tall)
+        int buttonWidth = 160;
+        int buttonHeight = 16;
+
+        int bg = depositAllArmed ? 0xFFB71C1C : 0xFF616161;
+        int border = depositAllArmed ? 0xFF7F0000 : 0xFF3A3A3A;
+        fill(matrixStack, buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, border);
+        fill(matrixStack, buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, bg);
+
+        String label = depositAllArmed ? "Click again to confirm..." : "Deposit All (main inventory)";
+        int textX = buttonX + (buttonWidth - this.font.width(label)) / 2;
+        this.font.draw(matrixStack, label, textX, buttonY + 4, 0xFFFFFFFF);
+    }
+
+    /**
+     * §10 Catalog Statistics. Entirely client-side (synced data + client registry, no new
+     * packets). "Total researchable" is cached in CatalogStatsCache since a full registry scan
+     * on every GUI open is exactly the stutter 1.7.0 was built to avoid.
+     */
+    private void renderStatsTab(MatrixStack matrixStack, int x, int y) {
+        JourneyDataAttachment data = this.menu.getJourneyData();
+
+        int unlockedCount = data.getUnlockedItems().size();
+        int totalResearchable = com.aryangpt007.journeymode.client.CatalogStatsCache.getTotalResearchable();
+        int percent = totalResearchable == 0 ? 0 : (unlockedCount * 100) / totalResearchable;
+
+        int lineY = y + 10;
+        this.font.draw(matrixStack, "Unlocked: " + unlockedCount + " / " + totalResearchable, x + 8, lineY, 0x404040);
+        lineY += 12;
+        this.font.draw(matrixStack, "Complete: " + percent + "%", x + 8, lineY, 0x404040);
+        lineY += 16;
+
+        this.font.draw(matrixStack, "By mod:", x + 8, lineY, 0x606060);
+        lineY += 11;
+
+        java.util.Map<String, Integer> perNamespaceTotal = com.aryangpt007.journeymode.client.CatalogStatsCache.getPerNamespaceResearchable();
+        java.util.Map<String, Integer> perNamespaceUnlocked = com.aryangpt007.journeymode.client.CatalogStatsCache.getPerNamespaceUnlocked(data);
+
+        int rows = 0;
+        for (java.util.Map.Entry<String, Integer> entry : perNamespaceTotal.entrySet()) {
+            if (rows >= 6) break; // room-limited; a scrollable list is future polish, not this pass
+            String namespace = entry.getKey();
+            int nsTotal = entry.getValue();
+            int nsUnlocked = perNamespaceUnlocked.getOrDefault(namespace, 0);
+            this.font.draw(matrixStack, namespace + ": " + nsUnlocked + "/" + nsTotal, x + 12, lineY, 0x404040);
+            lineY += 10;
+            rows++;
+        }
+
+        if (!data.getUnlockTimestamps().isEmpty()) {
+            long latest = 0L;
+            String latestKey = null;
+            for (java.util.Map.Entry<String, Long> entry : data.getUnlockTimestamps().entrySet()) {
+                if (entry.getValue() > latest) {
+                    latest = entry.getValue();
+                    latestKey = entry.getKey();
+                }
+            }
+            if (latestKey != null) {
+                ItemStack latestStack = JourneyDataAttachment.itemStackFromKey(latestKey);
+                String latestName = latestStack.isEmpty() ? latestKey : latestStack.getHoverName().getString();
+                this.font.draw(matrixStack, "Latest: " + latestName, x + 8, y + 96, 0x606060);
+            }
         }
     }
 
@@ -324,23 +426,43 @@ public class JourneyModeScreen extends ContainerScreen<JourneyModeMenu> {
     }
 
     @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // TextFieldWidget.keyPressed only consumes control keys (backspace/arrows/select-all/etc.)
+        // and returns false for plain character keys, since those are handled by charTyped
+        // instead. Left unguarded, that lets a letter key bound to a vanilla keybind (e.g. "E"
+        // for inventory-close) bubble past the field and close this screen mid-type. Swallow
+        // everything except Escape while the search box has focus.
+        if (this.searchBox != null && this.searchBox.isFocused() && keyCode != GLFW.GLFW_KEY_ESCAPE) {
+            this.searchBox.keyPressed(keyCode, scanCode, modifiers);
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
 
         // Check tab clicks
-        if (mouseY >= y - 20 && mouseY < y) {
-            if (mouseX >= x + 10 && mouseX < x + 70) {
+        if (mouseY >= y + TAB_Y_OFFSET && mouseY < y) {
+            if (mouseX >= x + DEPOSIT_TAB_X && mouseX < x + DEPOSIT_TAB_X + TAB_WIDTH) {
                 currentTab = Tab.DEPOSIT;
                 this.menu.setDepositSlotEnabled(true);
                 this.menu.setInJourneyTab(false);
                 NetworkHandler.CHANNEL.sendToServer(new SyncTabPacket(false));
                 return true;
-            } else if (mouseX >= x + 80 && mouseX < x + 140) {
+            } else if (mouseX >= x + JOURNEY_TAB_X && mouseX < x + JOURNEY_TAB_X + TAB_WIDTH) {
                 currentTab = Tab.JOURNEY;
                 this.menu.setDepositSlotEnabled(false);
                 this.menu.setInJourneyTab(true);
                 NetworkHandler.CHANNEL.sendToServer(new SyncTabPacket(true));
+                return true;
+            } else if (mouseX >= x + STATS_TAB_X && mouseX < x + STATS_TAB_X + TAB_WIDTH) {
+                currentTab = Tab.STATS;
+                this.menu.setDepositSlotEnabled(false);
+                this.menu.setInJourneyTab(false);
+                NetworkHandler.CHANNEL.sendToServer(new SyncTabPacket(false));
                 return true;
             }
         }
@@ -360,6 +482,20 @@ public class JourneyModeScreen extends ContainerScreen<JourneyModeMenu> {
                     this.menu.submitDeposit();
                     return true;
                 }
+            }
+
+            int allButtonX = x + 8;
+            int allButtonY = y + 80;
+            if (mouseX >= allButtonX && mouseX < allButtonX + 160 &&
+                mouseY >= allButtonY && mouseY < allButtonY + 16) {
+                if (depositAllArmed) {
+                    depositAllArmed = false;
+                    NetworkHandler.CHANNEL.sendToServer(new DepositAllPacket(hasShiftDown()));
+                } else {
+                    depositAllArmed = true;
+                    depositAllArmedUntil = System.currentTimeMillis() + DEPOSIT_ALL_CONFIRM_WINDOW_MS;
+                }
+                return true;
             }
         }
 

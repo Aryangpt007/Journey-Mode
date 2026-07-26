@@ -58,7 +58,7 @@ public class JourneyMode {
         
         // Register commands
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> {
-            JourneyModeCommand.register(event.getDispatcher());
+            JourneyModeCommand.register(event.getDispatcher(), event.getBuildContext());
         });
 
         // Client-side setup

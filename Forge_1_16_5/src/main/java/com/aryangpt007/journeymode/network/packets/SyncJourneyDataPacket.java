@@ -15,11 +15,17 @@ public class SyncJourneyDataPacket {
     private final Map<String, Integer> collectedCounts;
     private final Set<String> unlockedItems;
     private final Map<String, Long> unlockTimestamps;
+    private final boolean enabled;
+    private final boolean showTooltips;
+    private final String teamDisplayName; // empty string = no team
 
-    public SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps) {
+    public SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled, boolean showTooltips, String teamDisplayName) {
         this.collectedCounts = collectedCounts;
         this.unlockedItems = unlockedItems;
         this.unlockTimestamps = unlockTimestamps;
+        this.enabled = enabled;
+        this.showTooltips = showTooltips;
+        this.teamDisplayName = teamDisplayName == null ? "" : teamDisplayName;
     }
 
     public Map<String, Integer> getCollectedCounts() {
@@ -32,6 +38,18 @@ public class SyncJourneyDataPacket {
 
     public Map<String, Long> getUnlockTimestamps() {
         return unlockTimestamps;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public boolean isShowTooltips() {
+        return showTooltips;
+    }
+
+    public String getTeamDisplayName() {
+        return teamDisplayName;
     }
 
     public static void encode(SyncJourneyDataPacket msg, PacketBuffer buf) {
@@ -49,6 +67,9 @@ public class SyncJourneyDataPacket {
             buf.writeUtf(entry.getKey());
             buf.writeLong(entry.getValue());
         }
+        buf.writeBoolean(msg.enabled);
+        buf.writeBoolean(msg.showTooltips);
+        buf.writeUtf(msg.teamDisplayName);
     }
 
     public static SyncJourneyDataPacket decode(PacketBuffer buf) {
@@ -57,19 +78,22 @@ public class SyncJourneyDataPacket {
         for (int i = 0; i < collectedSize; i++) {
             collectedCounts.put(buf.readUtf(32767), buf.readInt());
         }
-        
+
         int unlockedSize = buf.readInt();
         Set<String> unlockedItems = new HashSet<>();
         for (int i = 0; i < unlockedSize; i++) {
             unlockedItems.add(buf.readUtf(32767));
         }
-        
+
         int timestampsSize = buf.readInt();
         Map<String, Long> unlockTimestamps = new HashMap<>();
         for (int i = 0; i < timestampsSize; i++) {
             unlockTimestamps.put(buf.readUtf(32767), buf.readLong());
         }
-        return new SyncJourneyDataPacket(collectedCounts, unlockedItems, unlockTimestamps);
+        boolean enabled = buf.readBoolean();
+        boolean showTooltips = buf.readBoolean();
+        String teamDisplayName = buf.readUtf(32767);
+        return new SyncJourneyDataPacket(collectedCounts, unlockedItems, unlockTimestamps, enabled, showTooltips, teamDisplayName);
     }
 
     public static void handle(SyncJourneyDataPacket msg, Supplier<NetworkEvent.Context> ctx) {

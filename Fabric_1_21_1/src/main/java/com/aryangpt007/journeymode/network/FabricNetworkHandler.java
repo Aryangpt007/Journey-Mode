@@ -34,6 +34,8 @@ public class FabricNetworkHandler {
         PayloadTypeRegistry.playC2S().register(OpenJourneyMenuPacket.TYPE, OpenJourneyMenuPacket.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(DeleteCarriedPacket.TYPE, DeleteCarriedPacket.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(SyncTabPacket.TYPE, SyncTabPacket.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(ConfigSyncPacket.TYPE, ConfigSyncPacket.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(DepositAllPacket.TYPE, DepositAllPacket.STREAM_CODEC);
 
         // 2. Register server receivers
         ServerPlayNetworking.registerGlobalReceiver(SubmitDepositPacket.TYPE, (payload, context) -> {
@@ -49,10 +51,19 @@ public class FabricNetworkHandler {
             context.server().execute(() -> {
                 ServerPlayer player = context.player();
                 JourneyDataAttachment journeyData = GlobalDataHandler.getPlayerData(player);
-                
+
                 ItemStack stack = JourneyDataAttachment.itemStackFromKey(payload.itemId(), player.level().registryAccess());
-                
-                if (!stack.isEmpty() && journeyData.isUnlocked(payload.itemId())) {
+
+                // §1 Shared Team Catalogs: unlock check must follow the same team-or-personal
+                // resolution as everywhere else - a team member can fetch anything the TEAM
+                // unlocked, not just their own personal unlocks. This is the anti-cheat boundary
+                // (server is authoritative), so getting this branch right matters.
+                boolean unlocked = journeyData.getTeamId() != null
+                    ? com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(player.getUUID())
+                        .map(team -> team.isUnlocked(payload.itemId())).orElse(false)
+                    : journeyData.isUnlocked(payload.itemId());
+
+                if (!stack.isEmpty() && unlocked) {
                     stack.setCount(Math.min(payload.count(), 64));
                     
                     if (!player.getInventory().add(stack)) {
@@ -108,6 +119,15 @@ public class FabricNetworkHandler {
                 }
             });
         });
+
+        ServerPlayNetworking.registerGlobalReceiver(DepositAllPacket.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                ServerPlayer player = context.player();
+                if (player.containerMenu instanceof JourneyModeMenu menu) {
+                    menu.processDepositAll(payload.includeHotbar());
+                }
+            });
+        });
     }
 
     /**
@@ -118,19 +138,64 @@ public class FabricNetworkHandler {
             context.client().execute(() -> {
                 Player player = context.player();
                 JourneyDataAttachment data = GlobalDataHandler.getPlayerData(player);
-                data.updateFromSync(payload.collectedCounts(), payload.unlockedItems(), payload.unlockTimestamps());
+                data.updateFromSync(payload.collectedCounts(), payload.unlockedItems(), payload.unlockTimestamps(), payload.enabled(), payload.showTooltips(), payload.teamDisplayName());
+                celebrateNewUnlocks(player, data.getAndClearNewlyUnlocked());
             });
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(ConfigSyncPacket.TYPE, (payload, context) -> {
+            context.client().execute(() -> com.aryangpt007.journeymode.config.ConfigHandler.applySyncedRules(payload.snapshot()));
         });
     }
 
     /**
-     * Utility to send sync packet to a specific player
+     * §11 Visual Polish: unlock sound + action-bar message on threshold crossing, driven purely
+     * by client-side diffing (see JourneyDataAttachment.updateFromSync) - no dedicated
+     * "newly_unlocked" packet field needed. A full graphical toast (with custom textures) is
+     * deliberately out of scope for this pass - there's no art-asset pipeline in play here, so
+     * this uses the same action-bar message style the rest of the mod already uses. Runs purely
+     * client-side (this is called only from the client's SyncJourneyDataPacket receiver above),
+     * using the client Player instance directly rather than net.minecraft.client.Minecraft so
+     * this stays free of any client-only class references.
+     */
+    private static void celebrateNewUnlocks(Player player, java.util.Set<String> newlyUnlocked) {
+        if (newlyUnlocked.isEmpty() || player == null) return;
+
+        if (newlyUnlocked.size() == 1) {
+            String key = newlyUnlocked.iterator().next();
+            ItemStack stack = JourneyDataAttachment.itemStackFromKey(key, player.level().registryAccess());
+            String name = stack.isEmpty() ? key : stack.getHoverName().getString();
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal("§6Unlocked: " + name + "!"), true);
+        } else {
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal("§6Unlocked " + newlyUnlocked.size() + " items!"), true);
+        }
+    }
+
+    /**
+     * Utility to send sync packet to a specific player. §1 Shared Team Catalogs: if the player
+     * is on a team, the TEAM's shared progress is sent instead of their personal progress - the
+     * client never needs to know or care which source it came from, it just renders whatever
+     * it's given. This is the only place that distinction has to be made for display purposes
+     * (deposit/fetch/delete have their own team checks - see JourneyModeMenu / RequestItemPacket
+     * handling below).
      */
     public static void syncToPlayer(ServerPlayer player, JourneyDataAttachment data) {
+        java.util.Optional<com.aryangpt007.journeymode.data.TeamData> team = data.getTeamId() != null
+            ? com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(player.getUUID())
+            : java.util.Optional.empty();
+
+        var counts = team.map(com.aryangpt007.journeymode.data.TeamData::getAllCollectedCounts).orElseGet(data::getAllCollectedCounts);
+        var unlocked = team.map(com.aryangpt007.journeymode.data.TeamData::getUnlockedItems).orElseGet(data::getUnlockedItems);
+        var timestamps = team.map(com.aryangpt007.journeymode.data.TeamData::getUnlockTimestamps).orElseGet(data::getUnlockTimestamps);
+        String teamName = team.map(com.aryangpt007.journeymode.data.TeamData::getDisplayName).orElse(null);
+
         SyncJourneyDataPacket packet = new SyncJourneyDataPacket(
-            data.getAllCollectedCounts(),
-            data.getUnlockedItems(),
-            data.getUnlockTimestamps()
+            counts,
+            unlocked,
+            timestamps,
+            data.isEnabled(),
+            data.isShowTooltips(),
+            teamName
         );
         ServerPlayNetworking.send(player, packet);
     }

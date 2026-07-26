@@ -23,6 +23,7 @@ import java.util.*;
 
 public class JourneyModeMenu extends Container {
     private final EntityPlayer player;
+    private final InventoryPlayer playerInventoryRef;
     private final IJourneyData journeyData;
     private boolean depositSlotEnabled = true;
     private boolean inJourneyTab = false;
@@ -104,6 +105,7 @@ public class JourneyModeMenu extends Container {
 
     public JourneyModeMenu(InventoryPlayer playerInventory) {
         this.player = playerInventory.player;
+        this.playerInventoryRef = playerInventory;
         this.journeyData = player.getCapability(JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY, null);
 
         // Add deposit slot (center top of screen)
@@ -137,71 +139,145 @@ public class JourneyModeMenu extends Container {
     }
     
     private void syncDataToClient(EntityPlayerMP player) {
-        NetworkHandler.sendTo(
-            new SyncJourneyDataPacket(
-                journeyData.getAllCollectedCounts(),
-                journeyData.getUnlockedItems(),
-                journeyData.getUnlockTimestamps()
-            ),
-            player
-        );
+        // Delegates to GlobalDataHandler so the team-vs-personal resolution (§1) lives in one
+        // place instead of being duplicated here.
+        GlobalDataHandler.syncToClient(player, journeyData);
     }
-    
+
+    /**
+     * §1 Shared Team Catalogs: if this player is on a team, deposits/unlocks/progress-checks
+     * resolve against the team's shared TeamData instead of their personal IJourneyData - both
+     * deposits and unlocks pool, per the resolved design decision. Returns null if the player
+     * isn't on a team (the common case), so call sites fall back to personal data.
+     */
+    private com.aryangpt007.journeymode.data.TeamData resolveTeam() {
+        if (journeyData.getTeamId() == null) return null;
+        return com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(player.getUniqueID());
+    }
+
     /**
      * Process the deposit (called from server via packet)
      */
     public void processDeposit() {
         if (player.world.isRemote) return;
-        
+
         ItemStack stack = depositSlot.getStackInSlot(0);
         if (!stack.isEmpty()) {
             if (stack.getItem().getRegistryName() == null) return;
-            String itemId = stack.getItem().getRegistryName().toString();
-            if (ConfigHandler.isBlacklisted(itemId)) {
+            if (ConfigHandler.isBlacklisted(stack.getItem())) {
                 player.sendMessage(JourneyMode.translatable("blacklist_message", stack.getDisplayName()));
                 return;
             }
-            
-            if (journeyData.isUnlocked(stack)) {
+
+            com.aryangpt007.journeymode.data.TeamData team = resolveTeam();
+
+            boolean alreadyUnlocked = team != null ? team.isUnlocked(stack) : journeyData.isUnlocked(stack);
+            if (alreadyUnlocked) {
                 player.sendMessage(new TextComponentString("§e" + stack.getDisplayName() + " is already unlocked!"));
                 return;
             }
-            
-            boolean unlocked = journeyData.depositItem(stack.copy());
+
+            boolean unlocked = team != null ? team.depositItem(stack.copy()) : journeyData.depositItem(stack.copy());
             depositSlot.setInventorySlotContents(0, ItemStack.EMPTY);
-            
-            int threshold = journeyData.getThreshold(stack);
-            
+
+            int threshold = journeyData.getThreshold(stack); // item-based only, same regardless of team
+
             if (unlocked) {
                 player.sendMessage(JourneyMode.translatable("unlock_message", stack.getDisplayName(), threshold));
             } else {
-                int progress = journeyData.getProgress(stack);
-                int collected = journeyData.getCollectedCount(stack);
+                int progress = team != null ? team.getProgress(stack) : journeyData.getProgress(stack);
+                int collected = team != null ? team.getCollectedCount(stack) : journeyData.getCollectedCount(stack);
                 player.sendStatusMessage(
                     JourneyMode.translatable("deposit_message", stack.getCount(), stack.getDisplayName(), collected, threshold, progress),
                     true // Action bar
                 );
             }
-            
+
             if (player instanceof EntityPlayerMP) {
                 EntityPlayerMP serverPlayer = (EntityPlayerMP) player;
                 syncDataToClient(serverPlayer);
                 GlobalDataHandler.savePlayerUnlocks(serverPlayer, journeyData);
+                if (team != null) {
+                    com.aryangpt007.journeymode.data.TeamDataHandler.saveAfterDeposit(serverPlayer.getServer());
+                }
             }
         }
+    }
+
+    /**
+     * §8 Deposit All: main inventory only (slots 9-35) by default; hotbar (0-8) included only
+     * when the player held shift when clicking the button. Armor/offhand are never touched -
+     * they live in InventoryPlayer.armorInventory/offHandInventory, separate arrays from
+     * mainInventory, so they're excluded by construction, not by a special-case check.
+     * Already-unlocked item types are skipped (depositing into them would be wasted).
+     */
+    public void processDepositAll(boolean includeHotbar) {
+        if (player.world.isRemote) return;
+        if (!(player instanceof EntityPlayerMP)) return;
+        EntityPlayerMP serverPlayer = (EntityPlayerMP) player;
+
+        int firstSlot = includeHotbar ? 0 : 9;
+        int lastSlotExclusive = 36;
+
+        com.aryangpt007.journeymode.data.TeamData team = resolveTeam();
+
+        int typesDeposited = 0;
+        int itemsDeposited = 0;
+        int typesSkippedUnlocked = 0;
+
+        for (int i = firstSlot; i < lastSlotExclusive; i++) {
+            ItemStack stack = playerInventoryRef.mainInventory.get(i);
+            if (stack.isEmpty() || stack.getItem().getRegistryName() == null) continue;
+
+            if (ConfigHandler.isBlacklisted(stack.getItem())) continue;
+
+            boolean alreadyUnlocked = team != null ? team.isUnlocked(stack) : journeyData.isUnlocked(stack);
+            if (alreadyUnlocked) {
+                typesSkippedUnlocked++;
+                continue;
+            }
+
+            boolean unlocked = team != null ? team.depositItem(stack.copy()) : journeyData.depositItem(stack.copy());
+            itemsDeposited += stack.getCount();
+            typesDeposited++;
+            playerInventoryRef.mainInventory.set(i, ItemStack.EMPTY);
+
+            if (unlocked) {
+                int threshold = journeyData.getThreshold(stack);
+                player.sendMessage(JourneyMode.translatable("unlock_message", stack.getDisplayName(), threshold));
+            }
+        }
+
+        if (typesDeposited == 0 && typesSkippedUnlocked == 0) {
+            player.sendStatusMessage(new TextComponentString("Nothing to deposit."), true);
+        } else {
+            player.sendMessage(new TextComponentString(
+                "Deposited " + itemsDeposited + " items across " + typesDeposited + " types. " +
+                "Skipped " + typesSkippedUnlocked + " unlocked types."
+            ));
+        }
+
+        syncDataToClient(serverPlayer);
+        GlobalDataHandler.savePlayerUnlocks(serverPlayer, journeyData);
+        if (team != null) {
+            com.aryangpt007.journeymode.data.TeamDataHandler.saveAfterDeposit(serverPlayer.getServer());
+        }
+        this.detectAndSendChanges();
     }
 
     @Override
     public ItemStack transferStackInSlot(EntityPlayer playerIn, int index) {
         ItemStack itemstack = ItemStack.EMPTY;
         Slot slot = this.inventorySlots.get(index);
-        
+
         if (slot != null && slot.getHasStack()) {
             ItemStack slotStack = slot.getStack();
             itemstack = slotStack.copy();
 
             if (this.inJourneyTab) {
-                if (this.journeyData.isUnlocked(slotStack)) {
+                com.aryangpt007.journeymode.data.TeamData team = resolveTeam();
+                boolean unlocked = team != null ? team.isUnlocked(slotStack) : this.journeyData.isUnlocked(slotStack);
+                if (unlocked) {
                     slot.putStack(ItemStack.EMPTY);
                     slot.onSlotChanged();
                     return ItemStack.EMPTY; // Deleted/consumed

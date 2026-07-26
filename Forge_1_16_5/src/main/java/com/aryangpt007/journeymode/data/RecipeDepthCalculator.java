@@ -2,12 +2,13 @@ package com.aryangpt007.journeymode.data;
 
 import com.aryangpt007.journeymode.config.ConfigHandler;
 
-import net.minecraft.util.registry.Registry;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Rarity;
 import net.minecraft.item.crafting.Ingredient;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.item.crafting.RecipeManager;
+import net.minecraft.util.registry.Registry;
 
 import java.util.*;
 
@@ -16,8 +17,52 @@ import java.util.*;
  * Can be overridden by configuration
  */
 public class RecipeDepthCalculator {
+    /** Depth-0 threshold is derived from stack size, but never above this baseline.
+     *  Prevents stack-size-inflation mods (e.g. Bigger Stacks) from blowing thresholds up
+     *  to whatever they set an item's max stack size to (observed: 9,999). */
+    private static final int MAX_BASELINE_STACK_SIZE = 64;
+
+    // §7 Rarity-Aware Thresholds: only applies to depth-0 (recipe-less) stackable items.
+    // Table constant, not scattered logic - tune here, nowhere else. Java 8 toolchain here,
+    // so an if/else chain instead of a switch expression.
+    private static int rarityDivisor(Rarity rarity) {
+        if (rarity == Rarity.UNCOMMON) return 4;
+        if (rarity == Rarity.RARE) return 16;
+        if (rarity == Rarity.EPIC) return Integer.MAX_VALUE; // collapses to threshold 1, see applyRarity()
+        return 1; // COMMON
+    }
+
+    // Vanilla's own Rarity assignments are inconsistent for scarcity purposes (e.g. Nether Star
+    // is UNCOMMON despite being end-game-boss-only) - override the known offenders rather than
+    // trusting Item.getDefaultInstance().getRarity() blindly for these specific ids.
+    // Note: minecraft:sniffer_egg does not exist on 1.16.5 (added in a much later version) -
+    // omitted here rather than registering a lookup for an id that can never resolve.
+    private static final Map<String, Rarity> RARITY_OVERRIDES;
+    static {
+        Map<String, Rarity> overrides = new HashMap<>();
+        overrides.put("minecraft:nether_star", Rarity.RARE);
+        overrides.put("minecraft:heart_of_the_sea", Rarity.RARE);
+        overrides.put("minecraft:echo_shard", Rarity.RARE);
+        overrides.put("minecraft:enchanted_golden_apple", Rarity.EPIC);
+        overrides.put("minecraft:dragon_egg", Rarity.EPIC);
+        overrides.put("minecraft:wither_skeleton_skull", Rarity.RARE);
+        overrides.put("minecraft:dragon_head", Rarity.EPIC);
+        RARITY_OVERRIDES = Collections.unmodifiableMap(overrides);
+    }
+
+    private static int applyRarity(Item item, int stackSize) {
+        String itemId = Registry.ITEM.getKey(item).toString();
+        Rarity rarity = RARITY_OVERRIDES.containsKey(itemId) ? RARITY_OVERRIDES.get(itemId) : item.getDefaultInstance().getRarity();
+        int divisor = rarityDivisor(rarity);
+        return divisor == Integer.MAX_VALUE ? 1 : Math.max(1, stackSize / divisor);
+    }
+
     private final Map<Item, Integer> depthCache = new HashMap<>();
     private final Set<Item> calculating = new HashSet<>(); // For cycle detection
+    // Items whose depth was resolved while a cycle was open somewhere on the active call
+    // stack. Their result depends on an assumed depth-0 for the item that triggered the
+    // cycle break, so it must never be memoized as if it were a stable, final depth.
+    private final Set<Item> cycleTainted = new HashSet<>();
     private final RecipeManager recipeManager;
     private Map<Item, List<IRecipe<?>>> recipesByOutput = null;
 
@@ -37,26 +82,29 @@ public class RecipeDepthCalculator {
      * - Depth 3+: Requires 1 item
      */
     public synchronized int calculateThreshold(Item item) {
-        // Check for config override first
-        String itemId = Registry.ITEM.getKey(item).toString();
-        Integer configOverride = ConfigHandler.getThresholdOverride(itemId);
+        // Check for config override first (also covers tag/regex rules, default_override,
+        // datapack thresholds, and dev-API ThresholdProviders - see ConfigHandler).
+        Integer configOverride = ConfigHandler.getThresholdOverride(item);
         if (configOverride != null) {
             return Math.max(1, configOverride); // Ensure at least 1
         }
         
         // Use recipe-based calculation
-        int stackSize = item.getMaxStackSize();
-        
+        int rawStackSize = item.getMaxStackSize();
+
         // Items that only stack to 1 always require just 1
-        if (stackSize == 1) {
+        if (rawStackSize == 1) {
             return 1;
         }
-        
+
+        // Clamp to a sane baseline before using it in threshold math (see MAX_BASELINE_STACK_SIZE).
+        int stackSize = Math.min(rawStackSize, MAX_BASELINE_STACK_SIZE);
+
         int depth = getRecipeDepth(item);
-        
+
         switch (depth) {
             case 0:
-                return stackSize;                      // Raw materials: full stack
+                return applyRarity(item, stackSize);   // Raw materials: full stack, scaled by rarity (§7)
             case 1:
                 return Math.max(1, stackSize / 2);     // 50% of stack
             case 2:
@@ -77,24 +125,30 @@ public class RecipeDepthCalculator {
 
         // Detect cycles
         if (calculating.contains(item)) {
+            // Every item currently on the active resolution stack has its result tainted by
+            // this cycle break (directly or transitively) - none of them may be memoized as
+            // a stable depth, or a restart could resolve the same recipe graph in a different
+            // order and silently produce a different (and equally "correct") cached value.
+            cycleTainted.addAll(calculating);
+            cycleTainted.add(item);
             return 0; // Treat cyclic items as raw to break the cycle
         }
 
         calculating.add(item);
-        
+
         try {
             // Find all recipes that produce this item
             List<IRecipe<?>> recipesForItem = findRecipesProducing(item);
-            
+
             if (recipesForItem.isEmpty()) {
                 // No recipe = raw material
                 depthCache.put(item, 0);
                 return 0;
             }
-            
+
             // Calculate minimum depth across all recipes (use easiest recipe)
             int minDepth = Integer.MAX_VALUE;
-            
+
             for (IRecipe<?> recipe : recipesForItem) {
                 try {
                     int recipeDepth = calculateRecipeDepth(recipe);
@@ -103,11 +157,15 @@ public class RecipeDepthCalculator {
                     // Ignore buggy recipe during calculation
                 }
             }
-            
+
             int depth = minDepth == Integer.MAX_VALUE ? 0 : minDepth;
-            depthCache.put(item, depth);
+            if (!cycleTainted.remove(item)) {
+                depthCache.put(item, depth);
+            }
+            // else: tainted by a cycle somewhere below this item - deliberately not cached,
+            // will be recomputed fresh next time it's queried.
             return depth;
-            
+
         } finally {
             calculating.remove(item);
         }
@@ -189,6 +247,7 @@ public class RecipeDepthCalculator {
      */
     public synchronized void clearCache() {
         depthCache.clear();
+        cycleTainted.clear();
         recipesByOutput = null;
     }
 

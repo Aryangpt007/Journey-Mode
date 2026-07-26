@@ -19,6 +19,8 @@ public class NetworkHandler {
         CHANNEL.registerMessage(SyncTabPacket.Handler.class, SyncTabPacket.class, id++, Side.SERVER);
         CHANNEL.registerMessage(DeleteCarriedPacket.Handler.class, DeleteCarriedPacket.class, id++, Side.SERVER);
         CHANNEL.registerMessage(SyncJourneyDataPacket.Handler.class, SyncJourneyDataPacket.class, id++, Side.CLIENT);
+        CHANNEL.registerMessage(ConfigSyncPacket.Handler.class, ConfigSyncPacket.class, id++, Side.CLIENT);
+        CHANNEL.registerMessage(DepositAllPacket.Handler.class, DepositAllPacket.class, id++, Side.SERVER);
     }
 
     public static void sendToServer(IMessage message) {

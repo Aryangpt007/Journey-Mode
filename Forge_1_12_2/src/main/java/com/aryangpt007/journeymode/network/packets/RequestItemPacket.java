@@ -52,8 +52,22 @@ public class RequestItemPacket implements IMessage {
                     IJourneyData journeyData = player.getCapability(JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY, null);
                     if (journeyData != null) {
                         ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(message.itemId);
-                        
-                        if (!stack.isEmpty() && journeyData.isUnlocked(message.itemId)) {
+
+                        // §1 Shared Team Catalogs: unlock check must follow the same
+                        // team-or-personal resolution as everywhere else - a team member can
+                        // fetch anything the TEAM unlocked, not just their own personal unlocks.
+                        // This is the anti-cheat boundary (server is authoritative), so getting
+                        // this branch right matters.
+                        boolean unlocked;
+                        if (journeyData.getTeamId() != null) {
+                            com.aryangpt007.journeymode.data.TeamData team =
+                                com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(player.getUniqueID());
+                            unlocked = team != null && team.isUnlocked(message.itemId);
+                        } else {
+                            unlocked = journeyData.isUnlocked(message.itemId);
+                        }
+
+                        if (!stack.isEmpty() && unlocked) {
                             stack.setCount(Math.min(message.count, 64));
                             if (!player.inventory.addItemStackToInventory(stack)) {
                                 EntityItem entityItem = new EntityItem(

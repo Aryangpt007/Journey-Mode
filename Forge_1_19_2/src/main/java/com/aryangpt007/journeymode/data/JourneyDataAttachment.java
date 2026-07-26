@@ -37,10 +37,20 @@ public class JourneyDataAttachment {
     private final Set<String> unlockedItems; // Items unlocked for infinite access
     private final Map<String, Long> unlockTimestamps; // Item ID -> unlock timestamp (milliseconds)
     private boolean enabled; // Whether Journey Mode is enabled for this player
+    private boolean showTooltips = true; // Per-player tooltip display preference (/journeymode tooltips)
+    private String teamId; // null = no team; see TeamDataHandler for the per-world team registry
+    // Client-display-only: the team's human-readable name, refreshed on every sync. Never
+    // persisted (recomputed from the server each time) - unlike teamId, which IS persisted and
+    // drives server-side deposit/fetch routing.
+    private String teamDisplayName;
+
+    // §11 Visual Polish state - client-side only, never persisted.
+    private boolean hasSyncedOnce = false;
+    private Set<String> pendingUnlockCelebration = Collections.emptySet();
 
     @Deprecated // Use dynamic threshold via RecipeDepthCalculator
     public static final int UNLOCK_THRESHOLD = 30; // Fallback value
-    
+
     private RecipeDepthCalculator recipeCalculator; // Lazily initialized
 
     public JourneyDataAttachment() {
@@ -62,21 +72,25 @@ public class JourneyDataAttachment {
      */
     public String toJsonString() {
         JsonObject json = new JsonObject();
-        
+
         JsonObject countsJson = new JsonObject();
         collectedCounts.forEach(countsJson::addProperty);
         json.add("collected_counts", countsJson);
-        
+
         JsonArray unlockedJson = new JsonArray();
         unlockedItems.forEach(unlockedJson::add);
         json.add("unlocked_items", unlockedJson);
-        
+
         JsonObject timestampsJson = new JsonObject();
         unlockTimestamps.forEach(timestampsJson::addProperty);
         json.add("unlock_timestamps", timestampsJson);
-        
+
         json.addProperty("enabled", enabled);
-        
+        json.addProperty("show_tooltips", showTooltips);
+        if (teamId != null) {
+            json.addProperty("team_id", teamId);
+        }
+
         return GSON.toJson(json);
     }
 
@@ -87,37 +101,45 @@ public class JourneyDataAttachment {
         JourneyDataAttachment attachment = new JourneyDataAttachment();
         try {
             JsonObject json = JsonParser.parseString(jsonString).getAsJsonObject();
-            
+
             if (json.has("collected_counts")) {
                 JsonObject countsJson = json.getAsJsonObject("collected_counts");
-                countsJson.entrySet().forEach(entry -> 
+                countsJson.entrySet().forEach(entry ->
                     attachment.collectedCounts.put(entry.getKey(), entry.getValue().getAsInt())
                 );
             }
-            
+
             if (json.has("unlocked_items")) {
                 JsonArray unlockedJson = json.getAsJsonArray("unlocked_items");
-                unlockedJson.forEach(element -> 
+                unlockedJson.forEach(element ->
                     attachment.unlockedItems.add(element.getAsString())
                 );
             }
-            
+
             if (json.has("unlock_timestamps")) {
                 JsonObject timestampsJson = json.getAsJsonObject("unlock_timestamps");
-                timestampsJson.entrySet().forEach(entry -> 
+                timestampsJson.entrySet().forEach(entry ->
                     attachment.unlockTimestamps.put(entry.getKey(), entry.getValue().getAsLong())
                 );
             }
-            
+
             if (json.has("enabled")) {
                 attachment.enabled = json.get("enabled").getAsBoolean();
+            }
+
+            if (json.has("show_tooltips")) {
+                attachment.showTooltips = json.get("show_tooltips").getAsBoolean();
+            } // else: absent in old files - keep the default (true), no data loss either way
+
+            if (json.has("team_id") && !json.get("team_id").isJsonNull()) {
+                attachment.teamId = json.get("team_id").getAsString();
             }
         } catch (Exception e) {
             // Keep default empty attachment
         }
         return attachment;
     }
-    
+
     /**
      * Initialize the recipe calculator (called when needed)
      */
@@ -126,7 +148,7 @@ public class JourneyDataAttachment {
             this.recipeCalculator = new RecipeDepthCalculator(recipeManager, registryAccess);
         }
     }
-    
+
     /**
      * Get the unlock threshold for a specific item (dynamic based on recipe depth and stack size)
      */
@@ -139,13 +161,6 @@ public class JourneyDataAttachment {
     }
 
     /**
-     * Deposit items into Journey Mode tracking
-     * @param stack The ItemStack to deposit
-     * @param recipeManager The recipe manager for threshold calculation
-     * @param registryAccess Registry access for recipes
-     * @return true if this deposit unlocked the item
-     */
-    /**
      * Helper to get a normalized ItemStack, preserving only subtype NBT tags.
      */
     public static ItemStack getNormalizedStack(ItemStack original) {
@@ -155,7 +170,7 @@ public class JourneyDataAttachment {
             CompoundTag originalTag = original.getTag();
             CompoundTag normalizedTag = new CompoundTag();
             boolean hasSubtype = false;
-            
+
             if (originalTag.contains("Potion")) {
                 normalizedTag.putString("Potion", originalTag.getString("Potion"));
                 hasSubtype = true;
@@ -180,7 +195,16 @@ public class JourneyDataAttachment {
                 normalizedTag.put("Effects", originalTag.get("Effects"));
                 hasSubtype = true;
             }
-            
+
+            // Third-party NormalizationRules may contribute additional keys (denylisted
+            // container/block-entity keys are stripped inside the API before this returns).
+            for (String key : com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationKeys(originalTag)) {
+                if (originalTag.contains(key)) {
+                    normalizedTag.put(key, originalTag.get(key));
+                    hasSubtype = true;
+                }
+            }
+
             if (hasSubtype) {
                 normalized.setTag(normalizedTag);
             }
@@ -233,14 +257,14 @@ public class JourneyDataAttachment {
      */
     public boolean depositItem(ItemStack stack, RecipeManager recipeManager, RegistryAccess registryAccess) {
         initializeCalculator(recipeManager, registryAccess);
-        
+
         String key = getItemKey(stack);
         int currentCount = collectedCounts.getOrDefault(key, 0);
         int newCount = currentCount + stack.getCount();
         collectedCounts.put(key, newCount);
 
         int threshold = getThreshold(stack.getItem());
-        
+
         // Check if we just reached the threshold
         if (currentCount < threshold && newCount >= threshold) {
             unlockedItems.add(key);
@@ -248,6 +272,46 @@ public class JourneyDataAttachment {
             return true; // Item was just unlocked
         }
         return false;
+    }
+
+    /**
+     * OP-granted unlock (/journeymode grant). Adds the key directly, bypassing deposit progress.
+     */
+    public void grant(String key) {
+        unlockedItems.add(key);
+        unlockTimestamps.put(key, System.currentTimeMillis());
+    }
+
+    /**
+     * OP-revoked unlock (/journeymode revoke). Resets collected progress for this key to 0 too -
+     * otherwise the very next deposit (or a pending-unlock check) would instantly re-unlock it,
+     * making the revoke a no-op.
+     */
+    public void revoke(String key) {
+        unlockedItems.remove(key);
+        unlockTimestamps.remove(key);
+        collectedCounts.put(key, 0);
+    }
+
+    /**
+     * Re-evaluate existing partial progress against current thresholds and promote anything
+     * that now qualifies. Thresholds can drop after the fact (/journeymode all, /journeymode
+     * threshold, a rarity/datapack change) - already-unlocked items are never re-locked, but a
+     * lower threshold can make old progress newly sufficient. Called lazily (on data load, menu
+     * open) rather than iterating every player at command time.
+     */
+    public void checkPendingUnlocks(RecipeManager recipeManager, RegistryAccess registryAccess) {
+        initializeCalculator(recipeManager, registryAccess);
+        for (Map.Entry<String, Integer> entry : new HashMap<>(collectedCounts).entrySet()) {
+            String key = entry.getKey();
+            if (unlockedItems.contains(key)) continue;
+            ItemStack stack = itemStackFromKey(key);
+            if (stack.isEmpty()) continue;
+            if (entry.getValue() >= getThreshold(stack.getItem())) {
+                unlockedItems.add(key);
+                unlockTimestamps.put(key, System.currentTimeMillis());
+            }
+        }
     }
 
     /**
@@ -297,7 +361,7 @@ public class JourneyDataAttachment {
     public Set<String> getUnlockedItems() {
         return new HashSet<>(unlockedItems);
     }
-    
+
     /**
      * Get unlocked items sorted by timestamp (most recent first)
      */
@@ -310,7 +374,7 @@ public class JourneyDataAttachment {
         });
         return sortedItems;
     }
-    
+
     /**
      * Get all unlock timestamps
      */
@@ -342,11 +406,25 @@ public class JourneyDataAttachment {
     public Map<String, Integer> getAllCollectedCounts() {
         return new HashMap<>(collectedCounts);
     }
-    
+
     /**
      * Update data from server sync packet
      */
     public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps) {
+        // §11 Visual Polish: remember which keys are newly-unlocked-since-last-sync so the
+        // client can play a sound/show a message on the transition, without needing a dedicated
+        // "newly_unlocked" packet field - the full unlocked set is already synced every time.
+        // The very first sync after connecting (client capability starts empty) must be silent,
+        // or every already-unlocked item would "celebrate" on login.
+        if (hasSyncedOnce) {
+            Set<String> newKeys = new HashSet<>(unlocked);
+            newKeys.removeAll(this.unlockedItems);
+            this.pendingUnlockCelebration = newKeys;
+        } else {
+            this.pendingUnlockCelebration = Collections.emptySet();
+            this.hasSyncedOnce = true;
+        }
+
         this.collectedCounts.clear();
         this.collectedCounts.putAll(counts);
         this.unlockedItems.clear();
@@ -354,19 +432,77 @@ public class JourneyDataAttachment {
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(timestamps);
     }
-    
+
+    /** Client-side only: keys that just transitioned to unlocked on the most recent sync. Clears itself on read. */
+    public Set<String> getAndClearNewlyUnlocked() {
+        Set<String> result = pendingUnlockCelebration;
+        pendingUnlockCelebration = Collections.emptySet();
+        return result;
+    }
+
+    /**
+     * Update data from server sync packet, including per-player flags. The previous
+     * 3-argument overload never carried `enabled`/`showTooltips`, so the client's own capability
+     * instance (a separate object from the server's, even in singleplayer) silently never
+     * reflected /journeymode off or a tooltip preference change - this overload is now the one
+     * actually used by the packet handler.
+     */
+    public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps, boolean enabled, boolean showTooltips) {
+        updateFromSync(counts, unlocked, timestamps);
+        this.enabled = enabled;
+        this.showTooltips = showTooltips;
+    }
+
+    /** As above, plus the team display name for the client-side badge (§1); empty string = no team. */
+    public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps, boolean enabled, boolean showTooltips, String teamDisplayName) {
+        updateFromSync(counts, unlocked, timestamps, enabled, showTooltips);
+        this.teamDisplayName = (teamDisplayName == null || teamDisplayName.isEmpty()) ? null : teamDisplayName;
+    }
+
+    /** Client-side only: the team's display name for the badge, or null if not on a team. */
+    public String getTeamDisplayName() {
+        return teamDisplayName;
+    }
+
     /**
      * Check if Journey Mode is enabled for this player
      */
     public boolean isEnabled() {
         return enabled;
     }
-    
+
     /**
      * Set whether Journey Mode is enabled for this player
      */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    /**
+     * Per-player tooltip display preference (/journeymode tooltips on|off). Client-rendering-only
+     * setting, but stored/synced through the same attachment as everything else rather than a
+     * separate global config value, so each player can have their own preference.
+     */
+    public boolean isShowTooltips() {
+        return showTooltips;
+    }
+
+    public void setShowTooltips(boolean showTooltips) {
+        this.showTooltips = showTooltips;
+    }
+
+    /**
+     * §1 Shared Team Catalogs: null if not in a team, otherwise the id of the team whose shared
+     * TeamData (see TeamDataHandler) is authoritative for this player's deposits/unlocks. This
+     * flag itself is personal data (persisted in the GAMEDIR-scoped file, like everything else
+     * on this class) - the actual team progress it points to lives in the per-world teams file.
+     */
+    public String getTeamId() {
+        return teamId;
+    }
+
+    public void setTeamId(String teamId) {
+        this.teamId = teamId;
     }
 
     /**
@@ -380,6 +516,8 @@ public class JourneyDataAttachment {
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(other.unlockTimestamps);
         this.enabled = other.enabled;
+        this.showTooltips = other.showTooltips;
+        this.teamId = other.teamId;
     }
 
     /**

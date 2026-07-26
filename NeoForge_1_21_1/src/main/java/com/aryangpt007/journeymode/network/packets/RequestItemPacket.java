@@ -39,8 +39,17 @@ public record RequestItemPacket(String itemId, int count) implements CustomPacke
                 JourneyDataAttachment journeyData = serverPlayer.getData(JourneyMode.JOURNEY_DATA);
                 
                 ItemStack stack = JourneyDataAttachment.itemStackFromKey(packet.itemId, serverPlayer.level().registryAccess());
-                
-                if (!stack.isEmpty() && journeyData.isUnlocked(packet.itemId)) {
+
+                // §1 Shared Team Catalogs: unlock check must follow the same team-or-personal
+                // resolution as everywhere else - a team member can fetch anything the TEAM
+                // unlocked, not just their own personal unlocks. This is the anti-cheat
+                // boundary (server is authoritative), so getting this branch right matters.
+                boolean unlocked = journeyData.getTeamId() != null
+                    ? com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(serverPlayer.getUUID())
+                        .map(team -> team.isUnlocked(packet.itemId)).orElse(false)
+                    : journeyData.isUnlocked(packet.itemId);
+
+                if (!stack.isEmpty() && unlocked) {
                     stack.setCount(Math.min(packet.count, 64));
                     
                     // Try to add to inventory, if full drop on ground

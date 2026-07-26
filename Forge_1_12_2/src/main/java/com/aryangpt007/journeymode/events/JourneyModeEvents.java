@@ -35,6 +35,7 @@ public class JourneyModeEvents {
         if (event.player instanceof EntityPlayerMP) {
             EntityPlayerMP player = (EntityPlayerMP) event.player;
             GlobalDataHandler.loadPlayerUnlocks(player);
+            com.aryangpt007.journeymode.network.ConfigSyncHelper.pushToPlayer(player);
         }
     }
 

@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public class NetworkHandler {
     private static final String PROTOCOL_VERSION = "1";
-    
+
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
         new ResourceLocation(JourneyMode.MODID, "main"),
         () -> PROTOCOL_VERSION,
@@ -24,5 +24,7 @@ public class NetworkHandler {
         CHANNEL.registerMessage(id++, SyncTabPacket.class, SyncTabPacket::encode, SyncTabPacket::decode, SyncTabPacket::handle);
         CHANNEL.registerMessage(id++, DeleteCarriedPacket.class, DeleteCarriedPacket::encode, DeleteCarriedPacket::decode, DeleteCarriedPacket::handle);
         CHANNEL.registerMessage(id++, SyncJourneyDataPacket.class, SyncJourneyDataPacket::encode, SyncJourneyDataPacket::decode, SyncJourneyDataPacket::handle);
+        CHANNEL.registerMessage(id++, ConfigSyncPacket.class, ConfigSyncPacket::encode, ConfigSyncPacket::decode, ConfigSyncPacket::handle);
+        CHANNEL.registerMessage(id++, DepositAllPacket.class, DepositAllPacket::encode, DepositAllPacket::decode, DepositAllPacket::handle);
     }
 }

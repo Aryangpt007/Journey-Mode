@@ -1,15 +1,19 @@
 package com.aryangpt007.journeymode.events;
 
 import com.aryangpt007.journeymode.JourneyMode;
+import com.aryangpt007.journeymode.data.DatapackThresholdLoader;
 import com.aryangpt007.journeymode.data.GlobalDataHandler;
 import com.aryangpt007.journeymode.data.JourneyDataAttachment;
 import com.aryangpt007.journeymode.data.JourneyDataCapabilityProvider;
+import com.aryangpt007.journeymode.network.ConfigSyncHelper;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
@@ -30,10 +34,24 @@ public class JourneyModeEvents {
     }
 
     @SubscribeEvent
+    public void onServerStarting(FMLServerStartingEvent event) {
+        // §1 Shared Team Catalogs: (re)load the per-world teams file for this session, clearing
+        // any previous world's cache - a singleplayer client that switches worlds must never see
+        // a different world's teams.
+        com.aryangpt007.journeymode.data.TeamDataHandler.load(event.getServer());
+    }
+
+    @SubscribeEvent
+    public void onAddReloadListeners(AddReloadListenerEvent event) {
+        event.addListener(DatapackThresholdLoader.INSTANCE);
+    }
+
+    @SubscribeEvent
     public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayerEntity) {
             ServerPlayerEntity player = (ServerPlayerEntity) event.getEntity();
             GlobalDataHandler.loadPlayerUnlocks(player);
+            ConfigSyncHelper.pushToPlayer(player);
         }
     }
 
