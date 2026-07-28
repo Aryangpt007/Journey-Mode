@@ -50,8 +50,10 @@ src/generated/
 *.bak
 *.swp
 
-# AI Context (for AI assistants only)
-AI_CONTEXT.md
+# Internal docs - local only, README.md is the sole published markdown
+*.md
+!README.md
+
 *.tmp
 ~*
 
