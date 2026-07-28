@@ -64,7 +64,13 @@ public class FabricNetworkHandler {
                     : journeyData.isUnlocked(payload.itemId());
 
                 if (!stack.isEmpty() && unlocked) {
-                    stack.setCount(Math.min(payload.count(), 64));
+                    // Clamp to this item's own stack limit, not a flat 64. A "full stack" is per item -
+                    // swords stack to 1, potions to 16, modded items to whatever they declare - and a
+                    // 64-count stack of a size-1 item gets spread across 64 inventory slots by
+                    // Inventory.add(), which is exactly the duplication users saw. Enforced here rather
+                    // than only client-side, since the count arrives over the network and cannot be
+                    // trusted: a modified client asking for 64 diamond swords now gets one.
+                    stack.setCount(Math.max(1, Math.min(payload.count(), stack.getMaxStackSize())));
                     
                     if (!player.getInventory().add(stack)) {
                         ItemEntity entity = new ItemEntity(
@@ -149,7 +155,7 @@ public class FabricNetworkHandler {
     }
 
     /**
-     * §11 Visual Polish: unlock sound + action-bar message on threshold crossing, driven purely
+     * §11 Visual Polish: action-bar message on threshold crossing, driven purely
      * by client-side diffing (see JourneyDataAttachment.updateFromSync) - no dedicated
      * "newly_unlocked" packet field needed. A full graphical toast (with custom textures) is
      * deliberately out of scope for this pass - there's no art-asset pipeline in play here, so
@@ -188,6 +194,15 @@ public class FabricNetworkHandler {
         var unlocked = team.map(com.aryangpt007.journeymode.data.TeamData::getUnlockedItems).orElseGet(data::getUnlockedItems);
         var timestamps = team.map(com.aryangpt007.journeymode.data.TeamData::getUnlockTimestamps).orElseGet(data::getUnlockTimestamps);
         String teamName = team.map(com.aryangpt007.journeymode.data.TeamData::getDisplayName).orElse(null);
+        // Shed optional payload before this packet can cross vanilla's 1 MiB custom-payload
+        // ceiling - past it the client is kicked on the read, on every join. See
+        // JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES for why these two go first.
+        if (com.aryangpt007.journeymode.data.JourneyDataAttachment.estimateSyncBytes(counts, unlocked, timestamps) > com.aryangpt007.journeymode.data.JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES) {
+            timestamps = java.util.Collections.<String, Long>emptyMap();
+            if (com.aryangpt007.journeymode.data.JourneyDataAttachment.estimateSyncBytes(counts, unlocked, timestamps) > com.aryangpt007.journeymode.data.JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES) {
+                counts = java.util.Collections.<String, Integer>emptyMap();
+            }
+        }
 
         SyncJourneyDataPacket packet = new SyncJourneyDataPacket(
             counts,

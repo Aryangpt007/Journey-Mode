@@ -2,7 +2,7 @@
 
 This document is the source of truth for architecture and process. It replaces the earlier `SOLE_TRUTH.md` draft (discarded per maintainer instruction, 2026-07-25) — content below is re-verified against the actual codebase, not carried over blind. Companion tracker: [JOURNEY_MODE_CHECKLIST.md](JOURNEY_MODE_CHECKLIST.md).
 
-**Current shipped version: 1.8.0** — live on [GitHub Releases](https://github.com/Aryangpt007/Journey-Mode/releases/tag/v1.8.0), CurseForge, and Modrinth, across all 9 environments.
+**Current version: 1.8.1** — staged in `release_1.8.1/`, built from current `HEAD` across all 9 environments. A bug-fix release over 1.8.0 (which is live on [GitHub Releases](https://github.com/Aryangpt007/Journey-Mode/releases/tag/v1.8.0), CurseForge, and Modrinth): it fixes the deposit-screen freeze on cyclic recipe graphs, replaces the four 1.8.0 jars that shipped with an already-reverted unlock sound baked in, and closes a Forge 1.19.2 parity gap. Full account in [1.8.0_POST_RELEASE_FINDINGS.md](1.8.0_POST_RELEASE_FINDINGS.md).
 
 ---
 
@@ -99,11 +99,17 @@ return switch (depth) {
 - Depth 3+: 1.
 - Unstackable items (`getMaxStackSize() == 1`): always 1, regardless of depth.
 
-**Depth resolution:** `getRecipeDepth` walks `RecipeManager` recipes producing the item, takes the MIN depth across all recipes that craft it (easiest path wins), memoizes in `depthCache`, and breaks cycles via a `calculating` guard set.
+**Depth resolution:** `getRecipeDepth` seeds a fresh work budget and delegates to the private `resolveDepth`, which walks `RecipeManager` recipes producing the item, takes the MIN depth across all recipes that craft it (easiest path wins), memoizes in `depthCache`, and breaks cycles via a `calculating` guard set. Two exact early exits keep the walk small: the per-ingredient loop stops the moment it finds a depth-0 option (nothing can beat a raw material, and one broad tag ingredient can expand to hundreds of stacks), and the per-recipe loop stops the moment `minDepth` reaches 1 (a crafted item cannot resolve lower).
+
+**Bounded by construction (since 1.8.1):** `MAX_RECURSION_DEPTH` (64) caps nesting — the `calculating` guard already made infinite recursion impossible, but a long ingredient chain in a large modpack could still overflow the render thread's stack — and `MAX_NODE_VISITS` (250,000) caps total work per top-level query. Neither is expected to fire on a sane recipe graph; they exist so no modpack, however pathological, can turn a threshold lookup into a hang or a `StackOverflowError`. A result cut short by either guard is marked cycle-tainted, so it's flagged as provisional rather than presented as a structural truth.
 
 **Fixed in 1.8.0 — stack-size inflation bug:** `rawStackSize` used to feed directly into the depth-0 threshold with no ceiling. Stack-size-inflation mods (Bigger Stacks etc.) mutate `getMaxStackSize()` at runtime, which pushed thresholds as high as 9,999. Fixed by clamping to `min(rawStackSize, 64)` before any threshold math — the clamp is on the *math*, not on `rawStackSize` itself (the unstackable check above still uses the raw value, since that's just detecting `== 1`, unaffected by the bug).
 
-**Fixed in 1.8.0 — cycle-cache nondeterminism:** if recipe A needs B and B needs A, resolving A would previously memoize B's depth (and A's) using a depth-0 stand-in for whichever item triggered the cycle guard — a value that depends on resolution order, not the graph's real structure. Fixed via a `cycleTainted` set: when the cycle guard fires, every item currently on the active `calculating` stack is tainted; a tainted item's result is returned for that call but deliberately **not** memoized, so it's recomputed fresh next time rather than trusted as stable.
+**Fixed in 1.8.0 — cycle-cache nondeterminism:** if recipe A needs B and B needs A, resolving A would previously memoize B's depth (and A's) using a depth-0 stand-in for whichever item triggered the cycle guard — a value that depends on resolution order, not the graph's real structure. Addressed via a `cycleTainted` set: when the cycle guard fires, every item currently on the active `calculating` stack is tainted.
+
+**Revised in 1.8.1 — tainted results are now memoized.** 1.8.0's handling of the above was to return a tainted item's result for that call but deliberately **never** memoize it, so it was recomputed from scratch on every subsequent query. That traded a theoretical inconsistency for a real one: a tainted item's full graph walk ran again on every call, forever, and since the Deposit tab asked once per rendered frame (§9), touching almost any plank-family item pinned the render thread at 100% and froze the game outright — with no exception, no crash report and nothing in `latest.log`, because nothing was actually failing, it was just catastrophically slow. The trigger needs no misbehaving mod: a single reverse-crafting recipe (`door → planks`, a common modpack QoL feature) closes a cycle against ordinary vanilla structure (`planks → door`), and that pattern repeats across every plank type × every reversible wood item, right in the densest part of the graph.
+
+Tainted results are therefore cached like any other, and tracked in a `provisionalDepths` set that only feeds `getDebugInfo`. The order-dependence is accepted deliberately: the threshold this value feeds is a soft heuristic that config, datapack and dev-API rules all override outright (§7), so a stable order-derived depth is strictly better than a permanent performance cliff. The GUI and tooltip layers cache on top of this (§9, §10) so the calculator isn't consulted per frame at all.
 
 ### 6a. Rarity-Aware Thresholds (since 1.8.0)
 
@@ -159,6 +165,11 @@ All under `/journeymode`:
 
 **Fetch** (`RequestItemPacket`): client sends a hybrid key + count → server checks `isUnlocked(key)` against the team-or-personal target (the anti-cheat boundary — rejects + logs on failure) → reconstructs the `ItemStack` from the key → adds to inventory, or drops on the ground if full.
 
+**Client-side render budget (since 1.8.1).** Nothing the GUI draws may recompute per frame what it can memoize. Three caches enforce this, and any new screen work is expected to follow the same rule:
+- `JourneyModeScreen.depositThreshold(...)` and `TooltipHandler.thresholdFor(...)` resolve a threshold only when the item (1.12.2: the full stack, since its thresholds resolve per hybrid key) or `ConfigHandler.getRulesGeneration()` changes.
+- `getFilteredAndSortedItems` memoizes the search-filter step against the live sorted key list, so the expensive half — rebuilding an `ItemStack` and resolving a display name per unlocked key — reruns only when the catalog or query actually changes. Validating against the list itself rather than a counter means there's no staleness window.
+- `CatalogStatsCache` memoizes the per-namespace breakdown and the most-recently-unlocked key against `JourneyDataAttachment.getSyncGeneration()`, a counter bumped by `updateFromSync` — the one and only path that can change this data client-side.
+
 ---
 
 ## 10. Progress Tooltips & Catalog Statistics
@@ -199,6 +210,8 @@ Client-side action-bar message on newly-crossed unlock thresholds, driven by dif
 | Fabric 1.16.5–1.20.1 | `ClientPlayNetworking`/`ServerPlayNetworking`, inline channel handlers (no separate packet classes — a deliberate style difference from Forge, not an oversight) |
 | Fabric 1.21.1 | Converges on `PayloadTypeRegistry` + `StreamCodec`, same shape as NeoForge |
 
+**Sync payload ceiling (since 1.8.1).** `SyncJourneyDataPacket` carries the whole catalog on every send, and vanilla caps a single custom-payload packet at 1 MiB on every loader here. A player with tens of thousands of unlocked keys would build a payload past that ceiling — and a client that fails to read one is kicked, on every join, permanently. So `GlobalDataHandler.syncToClient` (Fabric 1.21.1: `FabricNetworkHandler.syncToPlayer`) estimates the payload first and sheds optional parts in a fixed order before building the packet: unlock timestamps first (they only drive the Journey grid's ordering and the Stats tab's "Latest:" line), then deposit counts (a progress readout). The unlocked set — the only part that gates item retrieval — is never truncated, and cannot reach the ceiling alone: 40,000 keys at a generous 25 bytes each is still under 1 MB. Constants live on `JourneyDataAttachment` (`MAX_SYNC_PAYLOAD_BYTES`, `estimateSyncBytes`) so all four loader families share one definition of the bound. A proper delta/chunked sync would remove the ceiling entirely and is the right long-term fix; this guard exists so the failure mode can never be an unrecoverable save.
+
 Any new packet type is 4 separate implementations, one per loader family. 1.8.0 added three: `ConfigSyncPacket`, `DepositAllPacket`, and an extended `SyncJourneyDataPacket` (now also carries `enabled`, `showTooltips`, and `teamDisplayName` — a gap existed pre-1.8.0 where the first two were never actually sent to the client at all, silently breaking client-side `/journeymode off` checks; fixed alongside the tooltip-toggle work).
 
 ---
@@ -220,6 +233,15 @@ Any new packet type is 4 separate implementations, one per loader family. 1.8.0 
 - GitHub releases are published separately via `gh release create <tag> <jars...> --notes <changelog>` (not scripted — run manually/by-request per release).
 - Release process for a new version: bump `mod_version` in all 9 `gradle.properties`, build all 9, stage into `release_<version>/` with the naming convention above, update `$VERSION`/`$CHANGELOG`/`$targets` in `upload-all.ps1`, run it, then `gh release create`.
 - Planned addition: `check-parity.ps1` gate in `upload-all.ps1` (see tracker cross-cutting work) — not yet built.
+
+### Rebuild discipline (learned the hard way in 1.8.0)
+
+The 1.8.0 jars for Forge 1.12.2, 1.16.5, 1.20.1 and NeoForge 1.21.1 were staged ~16 minutes after the squashed release commit and **never rebuilt** after a later source edit removed the unlock sound — so the public downloads carried a feature the source had already dropped, on 4 of 9 environments, and no process caught it. Two rules follow:
+
+- **A staged jar is only valid for the exact commit it was built from.** Any source change after staging invalidates all 9 — restage the whole set, never a subset.
+- **Delete the previous `release_<version>/` directory before staging a new one.** Copying into a directory that already holds jars is how a stale artifact survives a rebuild. `release_1.8.0/` was deleted outright when `release_1.8.1/` was staged, for exactly this reason.
+
+A jar-vs-source verification gate — unzip each staged jar, grep the classes for symbols that should not be there — is the mechanical form of this and is what `check-parity.ps1` should cover first, ahead of cross-environment source parity.
 
 ---
 

@@ -258,11 +258,12 @@ Status: **DONE** (2026-07-25, all 9) · Porting: all 9
 
 ## 11. Visual Polish
 
-Status: **TODO** · Porting: all 9 — **explicitly LAST priority, do not start here**
+Status: **PARTIALLY SHIPPED (1.8.0)** · Porting: all 9 — the message shipped, the art-asset half is still deferred
 
-- [ ] Unlock sound + toast/particle on threshold crossing — triggered client-side by diffing old vs new unlocked set from sync packet (needs "newly_unlocked" list from delta sync).
-- [ ] Custom textures: stay within vanilla GUI palette; test at GUI scale 1–4 and 1.12.2's different lighting path (`RenderHelper` fix from 1.6.0N).
-- [ ] Sounds via standard `SoundEvent` registration — forces a real assets pipeline into all 9 builds; verify each Gradle setup processes resources identically.
+- [x] Action-bar message on threshold crossing — shipped 1.8.0, triggered client-side by diffing the old vs new unlocked set on every sync; no "newly_unlocked" packet field was needed, since the full unlocked set is already synced every time. Batches simultaneous unlocks (e.g. from Deposit All) into one message. See JM_Project.md §12.
+- [x] ~~Unlock sound on threshold crossing~~ — **built and then deliberately reverted at the maintainer's request. Message-only is the intended final state; do not re-add.** (The 1.8.0 jars for Forge 1.12.2/1.16.5/1.20.1 and NeoForge 1.21.1 were staged before the revert and shipped with the sound anyway — fixed by the 1.8.1 rebuild, see `1.8.0_POST_RELEASE_FINDINGS.md`.)
+- [ ] Custom textures: stay within vanilla GUI palette; test at GUI scale 1–4 and 1.12.2's different lighting path (`RenderHelper` fix from 1.6.0N). Still deferred — no art-asset pipeline was in scope for the code-only 1.8.0 pass.
+- [ ] ~~Sounds via standard `SoundEvent` registration~~ — moot while the sound stays reverted; left here only so the "why isn't there one" question has an answer.
 
 ---
 

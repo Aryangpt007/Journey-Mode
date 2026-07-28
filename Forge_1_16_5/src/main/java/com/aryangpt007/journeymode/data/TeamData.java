@@ -87,7 +87,9 @@ public class TeamData {
     public int getProgress(ItemStack stack) {
         int count = getCollectedCount(stack);
         int threshold = getThreshold(stack.getItem());
-        return Math.min(100, (count * 100) / threshold);
+        // long math: a collected count past ~21M would overflow int and report a negative
+        // percentage. Thresholds are always >= 1 (calculateThreshold clamps), so no /0 here.
+        return (int) Math.min(100L, (long) count * 100L / threshold);
     }
 
     public Set<String> getUnlockedItems() {

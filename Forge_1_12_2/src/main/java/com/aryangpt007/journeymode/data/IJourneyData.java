@@ -28,6 +28,17 @@ public interface IJourneyData {
     int getCollectedCount(Item item);
     int getCollectedCount(ItemStack stack);
     Set<String> getUnlockedItems();
+
+    /**
+     * Bumped on every sync from the server. Client-side derived views (the Journey tab's
+     * filtered list, the Stats tab's per-namespace breakdown) memoize against this counter
+     * instead of rebuilding themselves from the whole unlocked set on every rendered frame.
+     */
+    int getSyncGeneration();
+
+    /** Size of the unlocked set without the defensive copy getUnlockedItems() makes. */
+    int getUnlockedCount();
+
     List<String> getUnlockedItemsSorted();
     Map<String, Long> getUnlockTimestamps();
     int getProgress(Item item);

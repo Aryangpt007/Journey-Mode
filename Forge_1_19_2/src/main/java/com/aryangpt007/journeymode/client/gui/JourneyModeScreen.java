@@ -42,6 +42,27 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     private static final int TAB_WIDTH = 54;
     private static final int TAB_HEIGHT = 20;
     private static final int TAB_Y_OFFSET = -20;
+    // The screen title and the team badge each get their own line above the tab row. They used to
+    // share one (the title was hardcoded to -30, the badge drawn at TAB_Y_OFFSET - 10, which is
+    // also -30), so any team name long enough to reach the centred "Journey Mode" ran straight
+    // through it. Both are derived from TAB_Y_OFFSET rather than re-guessed, so the three rows
+    // can never drift apart again.
+    private static final int TEAM_BADGE_Y_OFFSET = TAB_Y_OFFSET - 10;
+    private static final int TITLE_Y_OFFSET = TEAM_BADGE_Y_OFFSET - 12;
+
+    // §10 Stats tab layout. Every value is measured against the element below it rather than
+    // guessed: 1.8.0 hardcoded a 6-row cap with no clearance check at all, so on a modpack with
+    // more than a handful of namespaces the per-mod list ran through the "Latest:" footer and on
+    // into the vanilla "Inventory" label under the panel. Rows that don't fit now scroll.
+    private static final int STATS_ROWS_TOP = 43;      // first per-mod row, relative to panel top
+    private static final int STATS_ROW_HEIGHT = 10;
+    private static final int STATS_LATEST_Y = 86;      // fixed footer; clears inventoryLabelY (100)
+    private static final int STATS_VISIBLE_ROWS = (STATS_LATEST_Y - STATS_ROWS_TOP) / STATS_ROW_HEIGHT;
+    private static final int STATS_ROW_WIDTH = 152;    // panel width (176) less matching 12px margins
+    private static final int STATS_SCROLLBAR_X = 166;
+    private static final int STATS_SCROLLBAR_WIDTH = 4;
+
+    private int statsScrollOffset = 0;
     private static final int DEPOSIT_TAB_X = 6;
     private static final int JOURNEY_TAB_X = 64;
     private static final int STATS_TAB_X = 122;
@@ -71,7 +92,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         super.init();
         // Move title much higher to avoid overlap with tabs
         this.titleLabelX = (this.imageWidth - this.font.width(this.title)) / 2;
-        this.titleLabelY = -30; // Move title higher above the tabs
+        this.titleLabelY = TITLE_Y_OFFSET; // own line, clear of the team badge below it
         this.inventoryLabelY = this.imageHeight - 104; // Position inventory label with proper spacing
 
         // Create search box for Journey tab (positioned with proper spacing above inventory label)
@@ -126,7 +147,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
         // existing tab-body layout (that's exactly where the Deposit-All overlap bug came from).
         String teamName = this.menu.getJourneyData().getTeamDisplayName();
         if (teamName != null) {
-            this.font.draw(poseStack, "Team: " + teamName, x + DEPOSIT_TAB_X, y + TAB_Y_OFFSET - 10, 0xFFFFFF55);
+            this.font.draw(poseStack, "Team: " + teamName, x + DEPOSIT_TAB_X, y + TEAM_BADGE_Y_OFFSET, 0xFFFFFF55);
         }
 
         if (currentTab == Tab.DEPOSIT) {
@@ -221,7 +242,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                     this.minecraft.level.registryAccess()
                 );
 
-                int threshold = data.getThreshold(slotItem.getItem());
+                int threshold = depositThreshold(data, slotItem);
                 int collected = data.getCollectedCount(slotItem);
                 boolean alreadyUnlocked = data.isUnlocked(slotItem);
 
@@ -231,16 +252,40 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                     this.font.draw(poseStack, "Required: " + threshold + " items", x + 8, infoY, 0x404040);
                     this.font.draw(poseStack, "Collected: " + collected + "/" + threshold, x + 8, infoY + 12, 0x404040);
 
-                    int progress = data.getProgress(slotItem);
+                    // Derived from the cached threshold rather than a second
+                    // getThreshold() call; long math so a very large collected count
+                    // can never overflow into a negative percentage.
+                    int progress = (int) Math.min(100L, (long) collected * 100L / threshold);
                     this.font.draw(poseStack, "Progress: " + progress + "%", x + 8, infoY + 24, 0x606060);
                 }
             }
         } else {
             // General info when no item
-            this.font.draw(poseStack, "Unlocked: " + data.getUnlockedItems().size() + " items", x + 8, infoY, 0x404040);
+            this.font.draw(poseStack, "Unlocked: " + data.getUnlockedCount() + " items", x + 8, infoY, 0x404040);
         }
 
         renderDepositAllButton(poseStack, x, y);
+    }
+
+    // §6 Deposit-tab threshold cache. A threshold lookup can walk a large slice of the recipe
+    // graph the first time it sees an item; 1.8.0 called it once per rendered frame from here,
+    // so on any modpack whose recipe graph contains cycles (one reverse-crafting recipe is
+    // enough) this pinned the render thread at 100% and the game appeared to hang outright.
+    // Recompute only when the slot's item changes, or when a config reload/sync changes the
+    // resolved rules (rulesGeneration, the same counter CatalogStatsCache keys off).
+    private Item cachedThresholdItem = null;
+    private int cachedThresholdGeneration = -1;
+    private int cachedThreshold = 1;
+
+    private int depositThreshold(JourneyDataAttachment data, ItemStack slotItem) {
+        Item item = slotItem.getItem();
+        int generation = com.aryangpt007.journeymode.config.ConfigHandler.getRulesGeneration();
+        if (item != cachedThresholdItem || generation != cachedThresholdGeneration) {
+            cachedThreshold = Math.max(1, data.getThreshold(item));
+            cachedThresholdItem = item;
+            cachedThresholdGeneration = generation;
+        }
+        return cachedThreshold;
     }
 
     private void renderDepositAllButton(PoseStack poseStack, int x, int y) {
@@ -271,48 +316,76 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     private void renderStatsTab(PoseStack poseStack, int x, int y) {
         JourneyDataAttachment data = this.menu.getJourneyData();
 
-        int unlockedCount = data.getUnlockedItems().size();
+        int unlockedCount = data.getUnlockedCount();
         int totalResearchable = com.aryangpt007.journeymode.client.CatalogStatsCache.getTotalResearchable();
         int percent = totalResearchable == 0 ? 0 : (unlockedCount * 100) / totalResearchable;
 
-        int lineY = y + 10;
-        this.font.draw(poseStack, "Unlocked: " + unlockedCount + " / " + totalResearchable, x + 8, lineY, 0x404040);
-        lineY += 12;
-        this.font.draw(poseStack, "Complete: " + percent + "%", x + 8, lineY, 0x404040);
-        lineY += 16;
-
-        this.font.draw(poseStack, "By mod:", x + 8, lineY, 0x606060);
-        lineY += 11;
+        this.font.draw(poseStack, "Unlocked: " + unlockedCount + " / " + totalResearchable, x + 8, y + 8, 0x404040);
+        this.font.draw(poseStack, "Complete: " + percent + "%", x + 8, y + 19, 0x404040);
+        this.font.draw(poseStack, "By mod:", x + 8, y + 32, 0x606060);
 
         java.util.Map<String, Integer> perNamespaceTotal = com.aryangpt007.journeymode.client.CatalogStatsCache.getPerNamespaceResearchable();
         java.util.Map<String, Integer> perNamespaceUnlocked = com.aryangpt007.journeymode.client.CatalogStatsCache.getPerNamespaceUnlocked(data);
 
-        int rows = 0;
+        int maxScroll = Math.max(0, perNamespaceTotal.size() - STATS_VISIBLE_ROWS);
+        // A config reload can shrink the namespace list out from under the current offset.
+        if (statsScrollOffset > maxScroll) statsScrollOffset = maxScroll;
+
+        int labelWidth = maxScroll > 0 ? STATS_ROW_WIDTH - STATS_SCROLLBAR_WIDTH - 2 : STATS_ROW_WIDTH;
+
+        int index = 0;
+        int drawn = 0;
         for (java.util.Map.Entry<String, Integer> entry : perNamespaceTotal.entrySet()) {
-            if (rows >= 6) break; // room-limited; a scrollable list is future polish, not this pass
+            if (index++ < statsScrollOffset) continue;
+            if (drawn >= STATS_VISIBLE_ROWS) break;
             String namespace = entry.getKey();
             int nsTotal = entry.getValue();
-            int nsUnlocked = perNamespaceUnlocked.getOrDefault(namespace, 0);
-            this.font.draw(poseStack, namespace + ": " + nsUnlocked + "/" + nsTotal, x + 12, lineY, 0x404040);
-            lineY += 10;
-            rows++;
+            Integer nsUnlockedBoxed = perNamespaceUnlocked.get(namespace);
+            int nsUnlocked = nsUnlockedBoxed == null ? 0 : nsUnlockedBoxed;
+            String label = fitToWidth(namespace + ": " + nsUnlocked + "/" + nsTotal, labelWidth);
+            this.font.draw(poseStack, label, x + 12, y + STATS_ROWS_TOP + drawn * STATS_ROW_HEIGHT, 0x404040);
+            drawn++;
         }
 
-        if (!data.getUnlockTimestamps().isEmpty()) {
-            long latest = 0L;
-            String latestKey = null;
-            for (java.util.Map.Entry<String, Long> entry : data.getUnlockTimestamps().entrySet()) {
-                if (entry.getValue() > latest) {
-                    latest = entry.getValue();
-                    latestKey = entry.getKey();
-                }
-            }
-            if (latestKey != null) {
-                ItemStack latestStack = JourneyDataAttachment.itemStackFromKey(latestKey);
-                String latestName = latestStack.isEmpty() ? latestKey : latestStack.getHoverName().getString();
-                this.font.draw(poseStack, "Latest: " + latestName, x + 8, y + 96, 0x606060);
-            }
+        renderStatsScrollbar(poseStack, x, y, perNamespaceTotal.size(), maxScroll);
+
+        String latestKey = com.aryangpt007.journeymode.client.CatalogStatsCache.getMostRecentlyUnlockedKey(data);
+        if (latestKey != null) {
+            ItemStack latestStack = JourneyDataAttachment.itemStackFromKey(latestKey);
+            String latestName = latestStack.isEmpty() ? latestKey : latestStack.getHoverName().getString();
+            this.font.draw(poseStack, fitToWidth("Latest: " + latestName, STATS_ROW_WIDTH), x + 8, y + STATS_LATEST_Y, 0x606060);
         }
+    }
+
+    /**
+     * Thin scroll indicator for the per-mod list. Drawn only when the list actually overflows, so
+     * a world with a handful of namespaces looks exactly as it did before.
+     */
+    private void renderStatsScrollbar(PoseStack poseStack, int x, int y, int totalRows, int maxScroll) {
+        if (maxScroll <= 0) return;
+
+        int trackX = x + STATS_SCROLLBAR_X;
+        int trackTop = y + STATS_ROWS_TOP - 1;
+        int trackBottom = trackTop + STATS_VISIBLE_ROWS * STATS_ROW_HEIGHT;
+        fill(poseStack, trackX, trackTop, trackX + STATS_SCROLLBAR_WIDTH, trackBottom, 0xFF373737);
+
+        int trackHeight = trackBottom - trackTop;
+        int thumbHeight = Math.max(6, trackHeight * STATS_VISIBLE_ROWS / totalRows);
+        int thumbY = trackTop + (trackHeight - thumbHeight) * statsScrollOffset / maxScroll;
+        fill(poseStack, trackX, thumbY, trackX + STATS_SCROLLBAR_WIDTH, thumbY + thumbHeight, 0xFFC6C6C6);
+    }
+
+    /**
+     * Trim a stats line to the width actually available. A long namespace
+     * ("sophisticatedbackpacks: 0/61") otherwise runs past the panel edge, and once the scrollbar
+     * is drawn it would run underneath that too.
+     */
+    private String fitToWidth(String text, int maxWidth) {
+        if (this.font.width(text) <= maxWidth) return text;
+        int budget = maxWidth - this.font.width("...");
+        int end = text.length();
+        while (end > 0 && this.font.width(text.substring(0, end)) > budget) end--;
+        return text.substring(0, end) + "...";
     }
 
     private void renderJourneyTab(PoseStack poseStack, int x, int y, int mouseX, int mouseY) {
@@ -367,26 +440,44 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
     /**
      * Get unlocked items filtered by search query and sorted by unlock time (most recent first)
      */
+    // The search filter used to be re-derived on every call, and a single rendered frame reaches
+    // this twice (item grid + tooltip pass) with the mouse handlers on top of that. With a search
+    // active each pass rebuilt an ItemStack and resolved a display name for every unlocked key -
+    // thousands of allocations per frame on a large catalog. The sorted key list is cheap to
+    // recompute (string comparisons only) and doubles as the cache key, so the expensive step only
+    // re-runs when the catalog or the query actually changes. Validating against the live list
+    // rather than a counter means there is no staleness window at all.
+    private String cachedFilterQuery = null;
+    private List<String> cachedFilterSource = null;
+    private List<String> cachedFilterResult = null;
+
     private List<String> getFilteredAndSortedItems(JourneyDataAttachment data) {
         // Start with sorted items (most recent first)
         List<String> items = data.getUnlockedItemsSorted();
 
-        // Filter by search query if present
-        if (!searchQuery.isEmpty()) {
-            List<String> filtered = new ArrayList<>();
-            for (String key : items) {
-                ItemStack stack = JourneyDataAttachment.itemStackFromKey(key);
-                if (!stack.isEmpty()) {
-                    String itemName = stack.getHoverName().getString().toLowerCase();
-                    if (itemName.contains(searchQuery)) {
-                        filtered.add(key);
-                    }
-                }
-            }
-            return filtered;
+        if (searchQuery.isEmpty()) {
+            return items;
         }
 
-        return items;
+        if (searchQuery.equals(cachedFilterQuery) && items.equals(cachedFilterSource)) {
+            return cachedFilterResult;
+        }
+
+        List<String> filtered = new ArrayList<>();
+        for (String key : items) {
+            ItemStack stack = JourneyDataAttachment.itemStackFromKey(key);
+            if (!stack.isEmpty()) {
+                String itemName = stack.getHoverName().getString().toLowerCase();
+                if (itemName.contains(searchQuery)) {
+                    filtered.add(key);
+                }
+            }
+        }
+
+        cachedFilterQuery = searchQuery;
+        cachedFilterSource = items;
+        cachedFilterResult = filtered;
+        return filtered;
     }
 
     @Override
@@ -454,6 +545,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                 return true;
             } else if (mouseX >= x + STATS_TAB_X && mouseX < x + STATS_TAB_X + TAB_WIDTH) {
                 currentTab = Tab.STATS;
+                statsScrollOffset = 0;
                 this.menu.setDepositSlotEnabled(false);
                 NetworkHandler.CHANNEL.sendToServer(new SyncTabPacket(false));
                 return true;
@@ -524,7 +616,12 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                     }
 
                     // Request item from server
-                    int count = hasShiftDown() ? 64 : 1;
+                    // A "full stack" is per item, not a flat 64: swords stack to 1, potions to
+                    // 16, and mods declare their own limits. Ask the reconstructed stack instead
+                    // of assuming - the server clamps to the same limit independently, since it
+                    // cannot trust a count that arrived over the network.
+                    ItemStack requested = JourneyDataAttachment.itemStackFromKey(itemId);
+                    int count = hasShiftDown() ? Math.max(1, requested.getMaxStackSize()) : 1;
                     NetworkHandler.CHANNEL.sendToServer(new RequestItemPacket(itemId, count));
                     return true;
                 }
@@ -536,6 +633,13 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (currentTab == Tab.STATS) {
+            int maxScroll = Math.max(0, com.aryangpt007.journeymode.client.CatalogStatsCache
+                .getPerNamespaceResearchable().size() - STATS_VISIBLE_ROWS);
+            statsScrollOffset = Math.max(0, Math.min(maxScroll, statsScrollOffset - (int) delta));
+            return true;
+        }
+
         if (currentTab == Tab.JOURNEY) {
             JourneyDataAttachment data = this.menu.getJourneyData();
             List<String> unlockedItems = getFilteredAndSortedItems(data);

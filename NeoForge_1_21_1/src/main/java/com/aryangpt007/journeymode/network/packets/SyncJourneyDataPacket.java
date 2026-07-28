@@ -56,7 +56,7 @@ public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<St
                 var journeyData = context.player().getData(JourneyMode.JOURNEY_DATA);
                 // Update the client-side data with server data
                 journeyData.updateFromSync(packet.collectedCounts, packet.unlockedItems, packet.unlockTimestamps, packet.enabled, packet.showTooltips, packet.teamDisplayName);
-                // §11 Visual Polish: unlock sound + action-bar message on threshold crossing.
+                // §11 Visual Polish: action-bar message on threshold crossing.
                 com.aryangpt007.journeymode.client.ClientSetup.celebrateNewUnlocks(journeyData.getAndClearNewlyUnlocked());
             }
         });

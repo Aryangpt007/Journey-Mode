@@ -46,7 +46,30 @@ public class TooltipHandler {
         int collected = data.getCollectedCount(stack);
         if (collected <= 0) return; // don't clutter tooltips for items with zero progress
 
-        int threshold = data.getThreshold(stack);
+        int threshold = thresholdFor(data, stack);
         event.getToolTip().add("§7Journey: " + collected + "/" + threshold + " researched");
+    }
+
+    // A tooltip re-renders every frame while the cursor rests on a stack, so this threshold
+    // lookup sits on exactly the same hot path that froze the deposit tab in 1.8.0. Cache the
+    // resolved value per stack (item + metadata + NBT, since 1.12.2 resolves thresholds per
+    // hybrid key) and per config generation, so the recipe graph is only walked on a genuine
+    // miss. Not static-per-item like the other environments precisely because the 1.12.2
+    // getThreshold(ItemStack) overload consults the stack's own key first.
+    private static ItemStack cachedThresholdStack = ItemStack.EMPTY;
+    private static int cachedThresholdGeneration = -1;
+    private static int cachedThreshold = 1;
+
+    private static int thresholdFor(IJourneyData data, ItemStack stack) {
+        int generation = com.aryangpt007.journeymode.config.ConfigHandler.getRulesGeneration();
+        if (generation != cachedThresholdGeneration
+            || cachedThresholdStack.isEmpty()
+            || !ItemStack.areItemsEqual(cachedThresholdStack, stack)
+            || !ItemStack.areItemStackTagsEqual(cachedThresholdStack, stack)) {
+            cachedThreshold = Math.max(1, data.getThreshold(stack));
+            cachedThresholdStack = stack.copy();
+            cachedThresholdGeneration = generation;
+        }
+        return cachedThreshold;
     }
 }

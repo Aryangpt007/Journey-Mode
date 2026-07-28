@@ -117,7 +117,7 @@ public class SyncJourneyDataPacket implements IMessage {
         }
 
         /**
-         * §11 Visual Polish: unlock sound + action-bar message on threshold crossing, driven
+         * §11 Visual Polish: action-bar message on threshold crossing, driven
          * purely by client-side diffing (see JourneyData.updateFromSync) - no dedicated
          * "newly_unlocked" packet field needed. A full graphical toast (with custom textures) is
          * deliberately out of scope for this pass - there's no art-asset pipeline in play here,

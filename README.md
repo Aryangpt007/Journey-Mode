@@ -8,6 +8,12 @@
 
 ***
 
+> ### ⚠️ Running 1.8.0? Please update to 1.8.1.
+>
+> 1.8.0 had a game-breaking bug on certain modpacks: with some mod combinations, putting an item into the Deposit slot froze the game outright, with no crash report and nothing in the log to explain it. Four of the nine 1.8.0 downloads also shipped an unlock sound that was meant to have been removed. **Both are fixed in 1.8.1**, along with a shift-click withdrawal bug and two UI overlaps — see the [changelog](#-changelog). Updating is a drop-in replacement; your catalog, teams and config carry over untouched.
+
+***
+
 ## ⚡ Why Journey Mode?
 
 *   🧩 **Works with every mod automatically.** Any item with a recipe or registry entry is researchable — vanilla, Create, Mekanism, anything. No JEI or any other dependency required.
@@ -219,7 +225,7 @@ Install on **both client and server** for multiplayer. Singleplayer needs only t
 
 ## 🗺️ Roadmap
 
-Everything that used to be on this list — Shared Team Catalogs, Real-Time Config Sync, the Integration API (regex/tags/datapacks/dev hooks), the Global/Per-Item Threshold commands, Admin Grant/Revoke, Rarity-Aware Thresholds, Deposit All, Progress Tooltips, and Catalog Statistics — **shipped in 1.8.0**. See the changelog below.
+Everything that used to be on this list — Shared Team Catalogs, Real-Time Config Sync, the Integration API (regex/tags/datapacks/dev hooks), the Global/Per-Item Threshold commands, Admin Grant/Revoke, Rarity-Aware Thresholds, Deposit All, Progress Tooltips, and Catalog Statistics — **shipped in 1.8.0**, and **1.8.1 is the fix release you want** (see the warning at the top). See the changelog below.
 
 What's next:
 
@@ -230,6 +236,34 @@ Full changelog below and on [GitHub Releases](https://github.com/Aryangpt007/Jou
 ***
 
 ## 📋 Changelog
+
+### Version `1.8.1` (Critical Fixes — please update from 1.8.0)
+
+**Release Date:** July 2026
+
+> ⚠️ **1.8.0 shipped with a game-breaking bug on certain modpacks.** With some mod combinations, simply putting an item into the Deposit slot would freeze the game outright — no crash report, no error in the log, nothing to go on. It also affected four of the nine 1.8.0 downloads with an unlock sound that was supposed to have been removed before release. **Both are fixed here, along with everything else listed below. If you are on 1.8.0, update.** Your catalog, teams and config carry over untouched — there is no migration step and nothing to re-research.
+
+Bug-fix release: everything from 1.8.0 works the same, minus the defects below.
+
+#### 🧊 Fixed: game freeze when placing an item in the Deposit slot
+
+On modpacks whose crafting graph contains a cycle, the Deposit tab re-walked a large slice of the recipe graph *on every rendered frame*, pinning the render thread at 100% indefinitely. There was no crash report, no log line and no error — just an apparent hang. One "un-craft this back into planks" style reverse recipe was enough to trigger it, since ordinary vanilla doors, boats and signs close the loop from the other side; plain sticks, logs and stairs could all set it off.
+
+Three fixes, all nine versions: threshold results are now cached properly (including results resolved through a recipe cycle), the GUI only recalculates when the deposit slot's item actually changes, and the recipe walk itself is hard-bounded in both depth and total work so no recipe graph can stall it.
+
+#### 🔇 Fixed: unlock sound still playing
+
+The 1.8.0 downloads for Forge 1.12.2, Forge 1.16.5, Forge 1.20.1 and NeoForge 1.21.1 were built just before the unlock sound was removed and still carried it. All nine 1.8.1 jars are rebuilt from current source — unlock feedback is the on-screen message only, as intended.
+
+#### 🩹 Other fixes
+
+*   **Shift-click withdrew 64 of everything.** Shift-clicking an item in the Journey tab is meant to give you a full stack — but "a full stack" is per item, and it was hardcoded to 64. Swords, which stack to 1, came out as 64 separate slots' worth; potions, which stack to 16, likewise. Withdrawals now use each item's own stack limit, enforced server-side as well as client-side. Packs that raise stack limits get their raised limit, as you'd expect.
+*   **Team name overlapped the "Journey Mode" title.** The badge and the title were drawn on the same line, so any team name long enough ran straight through the title. They now get a line each.
+*   **Stats tab per-mod list overflowed the panel.** It was capped at 6 rows with no clearance check, so on a modpack with more than a handful of namespaces the list ran through the "Latest:" line and on into the "Inventory" label below. The list now scrolls — mouse wheel, with a scrollbar when there's more to see — long mod ids are trimmed to fit, and every row position is measured against the element below it.
+*   **Forge 1.19.2** was silently missing the unlock message and the team-name badge entirely — its sync handler had never been updated to the 1.8.0 payload. All nine versions now behave identically.
+*   **Deposit All** printed one chat line per unlocked item on top of the batched on-screen message; it's a single summary line now.
+*   **Performance**: the Journey tab's search, the Stats tab and progress tooltips no longer rebuild their entire view every frame — noticeable on large catalogs, with no change in behaviour.
+*   **Robustness**: the data sync packet can no longer exceed Minecraft's payload limit on a very large catalog (which would have disconnected the client on every join), and recipe-depth resolution can no longer overflow the stack on a pathological modded recipe graph.
 
 ### Version `1.8.0` (Teams, Config Sync, Integration API & Quality-of-Life)
 

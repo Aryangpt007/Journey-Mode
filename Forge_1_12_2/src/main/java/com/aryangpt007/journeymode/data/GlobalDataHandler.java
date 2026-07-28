@@ -224,6 +224,15 @@ public class GlobalDataHandler {
         java.util.Set<String> unlocked = team != null ? team.getUnlockedItems() : data.getUnlockedItems();
         Map<String, Long> timestamps = team != null ? team.getUnlockTimestamps() : data.getUnlockTimestamps();
         String teamName = team != null ? team.getDisplayName() : null;
+        // Shed optional payload before this packet can cross vanilla's 1 MiB custom-payload
+        // ceiling - past it the client is kicked on the read, on every join. See
+        // JourneyData.MAX_SYNC_PAYLOAD_BYTES for why these two go first.
+        if (JourneyData.estimateSyncBytes(counts, unlocked, timestamps) > JourneyData.MAX_SYNC_PAYLOAD_BYTES) {
+            timestamps = java.util.Collections.<String, Long>emptyMap();
+            if (JourneyData.estimateSyncBytes(counts, unlocked, timestamps) > JourneyData.MAX_SYNC_PAYLOAD_BYTES) {
+                counts = java.util.Collections.<String, Integer>emptyMap();
+            }
+        }
 
         NetworkHandler.sendTo(new SyncJourneyDataPacket(
             counts,

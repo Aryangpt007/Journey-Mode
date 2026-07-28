@@ -59,7 +59,13 @@ public class RequestItemPacket {
                         : journeyData.isUnlocked(msg.itemId);
 
                     if (!stack.isEmpty() && unlocked) {
-                        stack.setCount(Math.min(msg.count, 64));
+                        // Clamp to this item's own stack limit, not a flat 64. A "full stack" is per item -
+                        // swords stack to 1, potions to 16, modded items to whatever they declare - and a
+                        // 64-count stack of a size-1 item gets spread across 64 inventory slots by
+                        // Inventory.add(), which is exactly the duplication users saw. Enforced here rather
+                        // than only client-side, since the count arrives over the network and cannot be
+                        // trusted: a modified client asking for 64 diamond swords now gets one.
+                        stack.setCount(Math.max(1, Math.min(msg.count, stack.getMaxStackSize())));
                         
                         // Try to add to inventory, if full drop on ground
                         if (!serverPlayer.inventory.add(stack)) {

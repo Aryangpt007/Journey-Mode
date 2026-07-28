@@ -352,6 +352,45 @@ public class JourneyDataAttachment {
     }
 
     /**
+     * Vanilla caps a single custom-payload packet at 1 MiB, and a Journey sync carries the whole
+     * catalog every time it is sent. On a mega-modpack, a player who unlocks tens of thousands of
+     * keys would build a payload past that ceiling - and the client is kicked when it fails to
+     * read one, on every join, permanently. So optional payload is shed before the packet is
+     * built: timestamps first (they only drive the Journey grid's "most recent first" ordering
+     * and the Stats tab's "Latest:" line), then deposit counts (a progress readout). The unlocked
+     * set - the only part that actually gates item retrieval - is never truncated, and cannot
+     * reach the ceiling on its own: 40,000 keys at a generous 25 bytes each is still under 1 MB.
+     */
+    public static final int MAX_SYNC_PAYLOAD_BYTES = 700000;
+
+    /** Lower-bound byte estimate for a sync payload; see {@link #MAX_SYNC_PAYLOAD_BYTES}. */
+    public static int estimateSyncBytes(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps) {
+        long bytes = 0L;
+        for (String key : unlocked) bytes += key.length() + 3L;
+        for (String key : counts.keySet()) bytes += key.length() + 8L;
+        for (String key : timestamps.keySet()) bytes += key.length() + 12L;
+        return (int) Math.min(Integer.MAX_VALUE, bytes);
+    }
+
+    /**
+     * Bumped on every sync from the server. Client-side derived views (the Journey tab's
+     * filtered list, the Stats tab's per-namespace breakdown) memoize against this counter
+     * instead of rebuilding themselves from the whole unlocked set on every rendered frame.
+     */
+    private int syncGeneration = 0;
+
+    /** @see #syncGeneration */
+    public int getSyncGeneration() {
+        return syncGeneration;
+    }
+
+    /** Size of the unlocked set without the defensive copy getUnlockedItems() makes - that copy
+     *  was being taken once per rendered frame just to read its size. */
+    public int getUnlockedCount() {
+        return unlockedItems.size();
+    }
+
+    /**
      * Get all unlocked items
      */
     public Set<String> getUnlockedItems() {
@@ -384,7 +423,9 @@ public class JourneyDataAttachment {
     public int getProgress(Item item) {
         int count = getCollectedCount(item);
         int threshold = getThreshold(item);
-        return Math.min(100, (count * 100) / threshold);
+        // long math: a collected count past ~21M would overflow int and report a negative
+        // percentage. Thresholds are always >= 1 (calculateThreshold clamps), so no /0 here.
+        return (int) Math.min(100L, (long) count * 100L / threshold);
     }
 
     /**
@@ -393,7 +434,9 @@ public class JourneyDataAttachment {
     public int getProgress(ItemStack stack) {
         int count = getCollectedCount(stack);
         int threshold = getThreshold(stack.getItem());
-        return Math.min(100, (count * 100) / threshold);
+        // long math: a collected count past ~21M would overflow int and report a negative
+        // percentage. Thresholds are always >= 1 (calculateThreshold clamps), so no /0 here.
+        return (int) Math.min(100L, (long) count * 100L / threshold);
     }
 
     /**
@@ -408,7 +451,7 @@ public class JourneyDataAttachment {
      */
     public void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps) {
         // §11 Visual Polish: remember which keys are newly-unlocked-since-last-sync so the
-        // client can play a sound/show a message on the transition, without needing a dedicated
+        // client can show a message on the transition, without needing a dedicated
         // "newly_unlocked" packet field - the full unlocked set is already synced every time.
         // The very first sync after connecting (client capability starts empty) must be silent,
         // or every already-unlocked item would "celebrate" on login.
@@ -427,6 +470,7 @@ public class JourneyDataAttachment {
         this.unlockedItems.addAll(unlocked);
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(timestamps);
+        this.syncGeneration++;
     }
 
     /** Client-side only: keys that just transitioned to unlocked on the most recent sync. Clears itself on read. */

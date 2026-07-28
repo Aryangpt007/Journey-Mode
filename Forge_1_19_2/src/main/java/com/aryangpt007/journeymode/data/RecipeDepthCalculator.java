@@ -58,8 +58,22 @@ public class RecipeDepthCalculator {
     private final Set<Item> calculating = new HashSet<>(); // For cycle detection
     // Items whose depth was resolved while a cycle was open somewhere on the active call
     // stack. Their result depends on an assumed depth-0 for the item that triggered the
-    // cycle break, so it must never be memoized as if it were a stable, final depth.
+    // cycle break, so it is order-derived rather than purely structural (see resolveDepth).
     private final Set<Item> cycleTainted = new HashSet<>();
+    // Depths that were resolved through a cycle break (or a bounded-work cutoff). Kept for
+    // diagnostics only - unlike 1.8.0 these ARE memoized, see resolveDepth().
+    private final Set<Item> provisionalDepths = new HashSet<>();
+    /** Hard ceiling on recursion. The `calculating` guard already makes infinite recursion
+     *  impossible, but a legitimately long ingredient chain in a large modpack can still nest
+     *  deep enough to overflow the render thread's stack. Every depth >= 3 collapses to the same
+     *  threshold (see calculateThreshold), so cutting off far beyond that costs nothing real. */
+    private static final int MAX_RECURSION_DEPTH = 64;
+    /** Hard ceiling on how much graph a single top-level query may walk. Bounds the worst case
+     *  on a recipe graph no one anticipated; with memoization it is never reached in practice. */
+    private static final int MAX_NODE_VISITS = 250000;
+    private int recursionDepth = 0;
+    private int nodeBudget = MAX_NODE_VISITS;
+    private boolean resolving = false;
     private final RecipeManager recipeManager;
     private final RegistryAccess registryAccess;
     private Map<Item, List<Recipe<?>>> recipesByOutput = null;
@@ -114,22 +128,51 @@ public class RecipeDepthCalculator {
      * Returns 0 for raw materials (no recipe)
      */
     public synchronized int getRecipeDepth(Item item) {
-        if (depthCache.containsKey(item)) {
-            return depthCache.get(item);
+        // Each top-level query starts from clean guard state and a fresh work budget. Recursion
+        // below goes through resolveDepth(), never back through here, so this can never reset
+        // state mid-walk; the flag is purely defensive against a future caller re-entering.
+        if (resolving) {
+            return resolveDepth(item);
+        }
+        resolving = true;
+        calculating.clear();
+        cycleTainted.clear();
+        recursionDepth = 0;
+        nodeBudget = MAX_NODE_VISITS;
+        try {
+            return resolveDepth(item);
+        } finally {
+            resolving = false;
+        }
+    }
+
+    private int resolveDepth(Item item) {
+        Integer cached = depthCache.get(item);
+        if (cached != null) {
+            return cached;
         }
 
         // Detect cycles
         if (calculating.contains(item)) {
             // Every item currently on the active resolution stack has its result tainted by
-            // this cycle break (directly or transitively) - none of them may be memoized as
-            // a stable depth, or a restart could resolve the same recipe graph in a different
-            // order and silently produce a different (and equally "correct") cached value.
+            // this cycle break, directly or transitively.
             cycleTainted.addAll(calculating);
             cycleTainted.add(item);
             return 0; // Treat cyclic items as raw to break the cycle
         }
 
+        // Bounded-work guards. Neither is expected to fire on a sane recipe graph; they exist so
+        // that no modpack, however pathological, can turn a threshold lookup into a hang or a
+        // StackOverflowError on the render thread.
+        if (recursionDepth >= MAX_RECURSION_DEPTH || nodeBudget <= 0) {
+            cycleTainted.addAll(calculating);
+            cycleTainted.add(item);
+            return 0;
+        }
+        nodeBudget--;
+
         calculating.add(item);
+        recursionDepth++;
 
         try {
             // Find all recipes that produce this item
@@ -148,20 +191,33 @@ public class RecipeDepthCalculator {
                 try {
                     int recipeDepth = calculateRecipeDepth(recipe);
                     minDepth = Math.min(minDepth, recipeDepth);
+                    // A crafted item can never resolve below 1, so no later recipe can beat this
+                    // - stop before walking the rest of a possibly enormous recipe list.
+                    if (minDepth <= 1) break;
                 } catch (Throwable t) {
                     // Ignore buggy recipe during calculation
                 }
             }
 
             int depth = minDepth == Integer.MAX_VALUE ? 0 : minDepth;
-            if (!cycleTainted.remove(item)) {
-                depthCache.put(item, depth);
+            if (cycleTainted.remove(item)) {
+                // Resolved through a cycle break, so the value depends on the order the graph
+                // happened to be walked in rather than purely on its structure. 1.8.0 refused to
+                // memoize these, which turned every query for such an item into a full re-walk of
+                // its subgraph - and since the deposit screen asks once per frame, that froze the
+                // game outright on modpacks carrying reverse-crafting recipes (planks -> door,
+                // door -> planks). Memoized since 1.8.1: the threshold this feeds is a soft
+                // heuristic that config/datapack/API rules override outright, so a stable
+                // order-derived depth beats a permanent performance cliff. Flagged for debug info.
+                provisionalDepths.add(item);
+            } else {
+                provisionalDepths.remove(item);
             }
-            // else: tainted by a cycle somewhere below this item - deliberately not cached,
-            // will be recomputed fresh next time it's queried.
+            depthCache.put(item, depth);
             return depth;
 
         } finally {
+            recursionDepth--;
             calculating.remove(item);
         }
     }
@@ -189,8 +245,11 @@ public class RecipeDepthCalculator {
                     for (ItemStack stack : possibleItems) {
                         try {
                             if (stack == null || stack.isEmpty()) continue;
-                            int itemDepth = getRecipeDepth(stack.getItem());
+                            int itemDepth = resolveDepth(stack.getItem());
                             minItemDepth = Math.min(minItemDepth, itemDepth);
+                            // Nothing beats a raw material, and one broad tag ingredient can
+                            // expand to hundreds of stacks - stop as soon as the answer is known.
+                            if (minItemDepth == 0) break;
                         } catch (Throwable t) {
                             // Ignore buggy items inside the ingredient
                         }
@@ -243,6 +302,11 @@ public class RecipeDepthCalculator {
     public synchronized void clearCache() {
         depthCache.clear();
         cycleTainted.clear();
+        calculating.clear();
+        provisionalDepths.clear();
+        recursionDepth = 0;
+        nodeBudget = MAX_NODE_VISITS;
+        resolving = false;
         recipesByOutput = null;
     }
 
@@ -255,6 +319,9 @@ public class RecipeDepthCalculator {
         int stackSize = item.getMaxStackSize();
 
         String type = depth == 0 ? "Raw Material" : "Crafted (Depth " + depth + ")";
+        if (provisionalDepths.contains(item)) {
+            type = type + ", provisional (cyclic recipe graph)";
+        }
 
         return String.format("%s - Stack: %d, Depth: %d, Threshold: %d, Type: %s",
             item.toString(), stackSize, depth, threshold, type);

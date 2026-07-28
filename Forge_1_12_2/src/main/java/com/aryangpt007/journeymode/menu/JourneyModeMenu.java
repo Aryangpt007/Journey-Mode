@@ -224,6 +224,7 @@ public class JourneyModeMenu extends Container {
         int typesDeposited = 0;
         int itemsDeposited = 0;
         int typesSkippedUnlocked = 0;
+        int typesUnlocked = 0;
 
         for (int i = firstSlot; i < lastSlotExclusive; i++) {
             ItemStack stack = playerInventoryRef.mainInventory.get(i);
@@ -243,8 +244,12 @@ public class JourneyModeMenu extends Container {
             playerInventoryRef.mainInventory.set(i, ItemStack.EMPTY);
 
             if (unlocked) {
-                int threshold = journeyData.getThreshold(stack);
-                player.sendMessage(JourneyMode.translatable("unlock_message", stack.getDisplayName(), threshold));
+                // Counted, not announced per item. A Deposit All that crosses twenty thresholds
+                // used to push twenty separate chat lines on top of the batched action-bar
+                // celebration the client already shows for the same event - JM_Project.md §12 is
+                // explicit that simultaneous unlocks batch into one message rather than spamming
+                // one per item.
+                typesUnlocked++;
             }
         }
 
@@ -253,7 +258,7 @@ public class JourneyModeMenu extends Container {
         } else {
             player.sendMessage(new TextComponentString(
                 "Deposited " + itemsDeposited + " items across " + typesDeposited + " types. " +
-                "Skipped " + typesSkippedUnlocked + " unlocked types."
+                "Unlocked " + typesUnlocked + ". Skipped " + typesSkippedUnlocked + " already-unlocked types."
             ));
         }
 

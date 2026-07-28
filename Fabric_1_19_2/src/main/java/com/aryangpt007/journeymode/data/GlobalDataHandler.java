@@ -224,6 +224,15 @@ public class GlobalDataHandler {
         java.util.Set<String> unlocked = team.map(TeamData::getUnlockedItems).orElseGet(data::getUnlockedItems);
         Map<String, Long> timestamps = team.map(TeamData::getUnlockTimestamps).orElseGet(data::getUnlockTimestamps);
         String teamName = team.map(TeamData::getDisplayName).orElse(null);
+        // Shed optional payload before this packet can cross vanilla's 1 MiB custom-payload
+        // ceiling - past it the client is kicked on the read, on every join. See
+        // JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES for why these two go first.
+        if (JourneyDataAttachment.estimateSyncBytes(counts, unlocked, timestamps) > JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES) {
+            timestamps = java.util.Collections.<String, Long>emptyMap();
+            if (JourneyDataAttachment.estimateSyncBytes(counts, unlocked, timestamps) > JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES) {
+                counts = java.util.Collections.<String, Integer>emptyMap();
+            }
+        }
 
         com.aryangpt007.journeymode.network.FabricNetworkHandler.syncToPlayer(
             player, counts, unlocked, timestamps, data.isEnabled(), data.isShowTooltips(), teamName);

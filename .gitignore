@@ -36,6 +36,7 @@ nbdist/
 
 # Minecraft
 run/
+runs/
 logs/
 crash-reports/
 
@@ -63,4 +64,5 @@ test-upload-config.ps1
 # Built distributions
 libs_dist/
 release_1.7.1/
+release_1.8.1/
 

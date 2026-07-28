@@ -224,6 +224,15 @@ public class GlobalDataHandler {
         Set<String> unlocked = team.isPresent() ? team.get().getUnlockedItems() : data.getUnlockedItems();
         Map<String, Long> timestamps = team.isPresent() ? team.get().getUnlockTimestamps() : data.getUnlockTimestamps();
         String teamName = team.isPresent() ? team.get().getDisplayName() : null;
+        // Shed optional payload before this packet can cross vanilla's 1 MiB custom-payload
+        // ceiling - past it the client is kicked on the read, on every join. See
+        // JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES for why these two go first.
+        if (JourneyDataAttachment.estimateSyncBytes(counts, unlocked, timestamps) > JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES) {
+            timestamps = java.util.Collections.<String, Long>emptyMap();
+            if (JourneyDataAttachment.estimateSyncBytes(counts, unlocked, timestamps) > JourneyDataAttachment.MAX_SYNC_PAYLOAD_BYTES) {
+                counts = java.util.Collections.<String, Integer>emptyMap();
+            }
+        }
 
         FabricNetworkHandler.syncToPlayer(player, counts, unlocked, timestamps, data.isEnabled(), data.isShowTooltips(), teamName);
     }
