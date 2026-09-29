@@ -126,6 +126,19 @@ public class JourneyModeMenu extends Container {
         }
     }
     
+
+    /**
+     * Delta variant: tells the client only about the keys this action touched, instead of
+     * re-sending the whole catalog to report a single counter moving. Used by the single-deposit
+     * path, which fires constantly.
+     *
+     * <p>Deposit-All deliberately keeps the full sync: it changes many keys at once, so a delta
+     * would approach the size of a full sync anyway, and it is one packet either way.
+     */
+    private void syncDataToClient(ServerPlayerEntity player, java.util.Set<String> changedKeys) {
+        com.aryangpt007.journeymode.data.GlobalDataHandler.syncDeltaToClient(player, journeyData, changedKeys);
+    }
+
     private void syncDataToClient(ServerPlayerEntity player) {
         // Delegates to GlobalDataHandler so the team-vs-personal resolution (§1) lives in one
         // place instead of being duplicated here.
@@ -202,7 +215,7 @@ public class JourneyModeMenu extends Container {
             // Sync updated data to client & save to global file in real-time
             if (player instanceof ServerPlayerEntity) {
                 ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-                syncDataToClient(serverPlayer);
+                syncDataToClient(serverPlayer, java.util.Collections.singleton(JourneyDataAttachment.getItemKey(stack)));
                 com.aryangpt007.journeymode.data.GlobalDataHandler.savePlayerUnlocks(serverPlayer, journeyData);
                 if (team != null) {
                     com.aryangpt007.journeymode.data.TeamDataHandler.saveAfterDeposit(serverPlayer.server);

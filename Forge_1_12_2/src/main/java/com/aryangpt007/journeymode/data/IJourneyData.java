@@ -16,6 +16,9 @@ import java.util.Set;
 
 public interface IJourneyData {
     String toJsonString();
+
+    /** JSON form without the serialize/re-parse round trip. */
+    com.google.gson.JsonObject toJsonObject();
     void fromNBT(NBTTagCompound nbt);
     NBTTagCompound toNBT();
     
@@ -63,6 +66,12 @@ public interface IJourneyData {
      */
     void updateFromSync(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps, boolean enabled, boolean showTooltips, String teamDisplayName);
 
+    /**
+     * Merge a partial sync rather than replacing the catalog. Removals are not expressible;
+     * purge/revoke/reset stay on the full-sync path. See JourneyData.applyDelta.
+     */
+    void applyDelta(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps, boolean enabled, boolean showTooltips, String teamDisplayName);
+
     /** Client-side only: the team's display name for the badge, or null if not on a team. */
     String getTeamDisplayName();
 
@@ -104,6 +113,16 @@ public interface IJourneyData {
      * making the revoke a no-op.
      */
     void revoke(String key);
+
+    /**
+     * Remove an entry entirely - unlock, timestamp and collected count. Unlike {@link #revoke},
+     * which zeroes the count so an op-revoked item can't instantly re-unlock, this erases the key
+     * outright so it stops appearing anywhere. Used by /journeymode purge to get rid of an entry
+     * the client cannot render.
+     *
+     * @return true if the key was present
+     */
+    boolean purge(String key);
 
     /**
      * Re-evaluate existing partial progress against current thresholds and promote anything that

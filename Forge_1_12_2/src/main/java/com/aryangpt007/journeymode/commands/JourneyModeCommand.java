@@ -81,6 +81,12 @@ public class JourneyModeCommand extends CommandBase {
             case "team":
                 handleTeam(server, sender, args);
                 break;
+            case "save":
+                handleSave(server, sender, args);
+                break;
+            case "purge":
+                purgeEntry(server, sender, args);
+                break;
             case "reloadconfig":
                 requireOp(sender);
                 reloadConfig(server, sender);
@@ -103,6 +109,61 @@ public class JourneyModeCommand extends CommandBase {
                 break;
             default:
                 sender.sendMessage(new TextComponentString("§cInvalid arguments. Usage: " + getUsage(sender)));
+        }
+    }
+
+    // ---------------------------------------------------------------- purge (self-service)
+
+    /**
+     * Remove a single entry from the caller's own catalog.
+     *
+     * <p>Deliberately <b>not</b> op-gated. An entry whose owning mod throws while rendering it
+     * makes the whole menu unusable, and before this existed the only escape was
+     * {@code /journeymode reset}, which wipes every unlock the player has. Letting someone delete
+     * their own progress is not a permission concern; being unable to is a support burden.
+     *
+     * <p>The key is rejoined from the remaining arguments rather than taking args[1] alone, so a
+     * hybrid key ({@code base_id|nbt}) containing spaces survives tokenisation.
+     */
+    private void purgeEntry(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
+        EntityPlayerMP player = asPlayer(sender);
+        if (args.length < 2) {
+            throw new CommandException("Give the entry key, e.g. /journeymode purge irons_spellbooks:scroll");
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i < args.length; i++) {
+            if (i > 1) sb.append(' ');
+            sb.append(args[i]);
+        }
+        String key = sb.toString().trim();
+
+        IJourneyData data = getData(player);
+        boolean removed = data.purge(key);
+
+        // A team's catalog is shared, so purging from it affects every member - only the owner
+        // may do that. Non-owners still get their personal entry cleared above.
+        // 1.12.2's handler returns the team directly (nullable) rather than an Optional.
+        com.aryangpt007.journeymode.data.TeamData team =
+            com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(player.getUniqueID());
+        if (team != null) {
+            if (player.getUniqueID().equals(team.getOwnerUuid())) {
+                if (team.purge(key)) {
+                    removed = true;
+                    com.aryangpt007.journeymode.data.TeamDataHandler.saveAfterDeposit(server);
+                }
+            } else if (team.isUnlocked(key)) {
+                throw new CommandException("'" + key + "' belongs to your team's shared catalog - only the team owner can purge it.");
+            }
+        }
+
+        GlobalDataHandler.savePlayerUnlocks(player, data);
+        GlobalDataHandler.syncToClient(player, data);
+
+        if (removed) {
+            sender.sendMessage(new TextComponentString("§aRemoved '" + key + "' from your catalog."));
+        } else {
+            sender.sendMessage(new TextComponentString("§cNo catalog entry matched '" + key + "'."));
         }
     }
 
@@ -189,8 +250,10 @@ public class JourneyModeCommand extends CommandBase {
         String teamSub = args[1].toLowerCase();
         switch (teamSub) {
             case "create":
-                if (args.length < 3) throw new WrongUsageException("/journeymode team create <name>");
-                teamCreate(sender, args[2]);
+                if (args.length < 3) throw new WrongUsageException("/journeymode team create <name> [fresh|inherit]");
+                // Default stays fresh so nobody who already learned the command gets different
+                // behaviour than before; "inherit" seeds the team from the creator's own unlocks.
+                teamCreate(sender, args[2], args.length > 3 && "inherit".equalsIgnoreCase(args[3]));
                 break;
             case "join":
                 if (args.length < 3) throw new WrongUsageException("/journeymode team join <name>");
@@ -215,13 +278,44 @@ public class JourneyModeCommand extends CommandBase {
         }
     }
 
-    private void teamCreate(ICommandSender sender, String name) throws CommandException {
+    private void teamCreate(ICommandSender sender, String name, boolean inherit) throws CommandException {
         EntityPlayerMP player = asPlayer(sender);
-        String error = com.aryangpt007.journeymode.data.TeamDataHandler.createTeam(player.getServer(), player, name);
+        String error = com.aryangpt007.journeymode.data.TeamDataHandler.createTeam(player.getServer(), player, name, inherit);
         if (error != null) {
             throw new CommandException(error);
         }
-        sender.sendMessage(new TextComponentString("Created team '" + name + "'. You're the owner."));
+        sender.sendMessage(new TextComponentString("Created team '" + name + "'. You're the owner."
+            + (inherit ? " Seeded with your unlocks (your own catalog is untouched)."
+                       : " Started fresh - use 'inherit' next time to seed it from your unlocks.")));
+    }
+
+    // ---------------------------------------------------------------- item 3: /journeymode save
+
+    private void handleSave(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
+        String sub = args.length > 1 ? args[1].toLowerCase() : "info";
+        if ("info".equals(sub)) {
+            String id = com.aryangpt007.journeymode.data.GlobalDataHandler.getCurrentSaveId();
+            sender.sendMessage(new TextComponentString("Journey Mode scope: "
+                + com.aryangpt007.journeymode.data.SaveScopeConfig.describe()));
+            sender.sendMessage(new TextComponentString("This save: " + (id == null ? "not identified yet" : id)));
+            if (!com.aryangpt007.journeymode.data.SaveScopeConfig.isPerSave()) {
+                sender.sendMessage(new TextComponentString("§7Catalogs are shared across every world in this installation."));
+            }
+            return;
+        }
+        if ("reset".equals(sub)) {
+            if (args.length < 3 || !"confirm".equalsIgnoreCase(args[2])) {
+                throw new CommandException("This wipes THIS world's catalog. The installation-wide archive is "
+                    + "untouched. Re-run as: /journeymode save reset confirm");
+            }
+            requireOp(sender); // affects every player in this world, not just the caller
+            boolean wiped = com.aryangpt007.journeymode.data.GlobalDataHandler.resetCurrentSave();
+            sender.sendMessage(new TextComponentString(wiped
+                ? "This world's Journey Mode catalog has been wiped. Players must rejoin to see it."
+                : "§cNothing to reset - unlock_scope is not per_save, or this world has no catalog yet."));
+            return;
+        }
+        throw new WrongUsageException("/journeymode save <info|reset confirm>");
     }
 
     private void teamJoin(ICommandSender sender, String name) throws CommandException {

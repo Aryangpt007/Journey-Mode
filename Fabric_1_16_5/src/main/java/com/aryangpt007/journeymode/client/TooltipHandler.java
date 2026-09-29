@@ -23,7 +23,7 @@ public class TooltipHandler {
 
         if (stack.isEmpty()) return;
 
-        String key = JourneyDataAttachment.getItemKey(stack);
+        String key = keyFor(stack);
         if (data.isUnlocked(key)) {
             lines.add(new TextComponent("§aJourney: Unlocked"));
             return;
@@ -54,5 +54,22 @@ public class TooltipHandler {
             cachedThresholdGeneration = generation;
         }
         return cachedThreshold;
+    }
+
+    // getItemKey() allocates a normalized stack plus a fresh tag, and for any subtype item runs
+    // an NBT toString() - all of it once per rendered frame while the cursor rests on a slot.
+    // The hovered stack is the same instance across those frames, so reference identity is a
+    // sound cache key here: a miss simply rebuilds, it never returns a wrong answer. This
+    // matters considerably more after the denylist inversion (roadmap item 1 Phase B), where
+    // keys carry far more NBT and the string being rebuilt gets much larger.
+    private static ItemStack cachedKeyStack = null;
+    private static String cachedKey = null;
+
+    private static String keyFor(ItemStack stack) {
+        if (stack != cachedKeyStack) {
+            cachedKey = JourneyDataAttachment.getItemKey(stack);
+            cachedKeyStack = stack;
+        }
+        return cachedKey;
     }
 }

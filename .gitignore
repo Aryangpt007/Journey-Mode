@@ -68,3 +68,8 @@ libs_dist/
 release_1.7.1/
 release_1.8.1/
 
+
+# One-time GTNH build - frozen, out of scope, not published
+Forge_1_7_10_GTNH/
+
+release_1.8.2/

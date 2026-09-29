@@ -34,18 +34,21 @@ public class JourneyData implements IJourneyData {
     private Set<String> pendingUnlockCelebration = Collections.emptySet();
 
     public static final int UNLOCK_THRESHOLD = 30;
-    private final RecipeDepthCalculator recipeCalculator;
 
     public JourneyData() {
         this.collectedCounts = new HashMap<>();
         this.unlockedItems = new HashSet<>();
         this.unlockTimestamps = new HashMap<>();
         this.enabled = true;
-        this.recipeCalculator = new RecipeDepthCalculator();
     }
 
+    /**
+     * Build the JSON form directly. GlobalDataHandler used to call toJsonString() and then
+     * immediately re-parse the result back into a JsonObject on every save - a pure
+     * serialize/parse round trip with no purpose, once per deposit.
+     */
     @Override
-    public String toJsonString() {
+    public JsonObject toJsonObject() {
         JsonObject json = new JsonObject();
         
         JsonObject countsJson = new JsonObject();
@@ -66,7 +69,12 @@ public class JourneyData implements IJourneyData {
             json.addProperty("team_id", teamId);
         }
 
-        return GSON.toJson(json);
+        return json;
+    }
+
+    @Override
+    public String toJsonString() {
+        return GSON.toJson(toJsonObject());
     }
 
     public static JourneyData fromJsonString(String jsonString) {
@@ -195,42 +203,25 @@ public class JourneyData implements IJourneyData {
         if (original.isEmpty()) return original;
         ItemStack normalized = new ItemStack(original.getItem(), 1, original.getMetadata());
         if (original.hasTagCompound()) {
-            NBTTagCompound originalTag = original.getTagCompound();
-            NBTTagCompound normalizedTag = new NBTTagCompound();
-            boolean hasSubtype = false;
-            
-            if (originalTag.hasKey("Potion")) {
-                normalizedTag.setString("Potion", originalTag.getString("Potion"));
-                hasSubtype = true;
-            }
-            if (originalTag.hasKey("CustomPotionEffects")) {
-                normalizedTag.setTag("CustomPotionEffects", originalTag.getTag("CustomPotionEffects"));
-                hasSubtype = true;
-            }
-            if (originalTag.hasKey("CustomPotionColor")) {
-                normalizedTag.setInteger("CustomPotionColor", originalTag.getInteger("CustomPotionColor"));
-                hasSubtype = true;
-            }
-            if (originalTag.hasKey("StoredEnchantments")) {
-                normalizedTag.setTag("StoredEnchantments", originalTag.getTag("StoredEnchantments"));
-                hasSubtype = true;
-            }
-            if (originalTag.hasKey("Effects")) {
-                normalizedTag.setTag("Effects", originalTag.getTag("Effects"));
-                hasSubtype = true;
-            }
+            // Deny-by-exception (see NormalizationRules). 1.8.1 did the opposite - an allowlist of
+            // a handful of vanilla keys - which silently discarded every modded NBT identity and is
+            // what broke Apotheosis gems, TACZ guns, Iron's Spells scrolls and GregTech hammers.
+            NBTTagCompound cleaned = NormalizationRules.strip(original.getTagCompound());
 
-            // Third-party NormalizationRules may contribute additional keys (denylisted
-            // container/block-entity keys are stripped inside the API before this returns).
-            for (String key : com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationKeys(originalTag)) {
-                if (originalTag.hasKey(key)) {
-                    normalizedTag.setTag(key, originalTag.getTag(key));
-                    hasSubtype = true;
+            // Third-party rules may contribute keys, but every one is re-checked against the
+            // strip rules first. JourneyModeAPI.DENYLISTED_KEYS is only four entries and does
+            // NOT cover ForgeCaps, backpacks, tanks and the rest of the container gate - taking
+            // the API at its word here would reopen the duplication hole outright.
+            for (String key : com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationKeys(original.getTagCompound())) {
+                if (NormalizationRules.isStripped(key, key)) continue;
+                if (original.getTagCompound().hasKey(key)
+                        && !cleaned.hasKey(key)) {
+                    cleaned.setTag(key, original.getTagCompound().getTag(key).copy());
                 }
             }
 
-            if (hasSubtype) {
-                normalized.setTagCompound(normalizedTag);
+            if (!cleaned.getKeySet().isEmpty()) {
+                normalized.setTagCompound(cleaned);
             }
         }
         return normalized;
@@ -250,7 +241,10 @@ public class JourneyData implements IJourneyData {
             baseId = baseId + ":" + normalized.getMetadata();
         }
         if (normalized.hasTagCompound() && !normalized.getTagCompound().getKeySet().isEmpty()) {
-            return baseId + "|" + normalized.getTagCompound().toString();
+            // Canonical (recursively key-sorted) rather than toString(), whose order follows
+            // HashMap bucket layout and is therefore input-dependent once tags are copied from the
+            // source stack instead of rebuilt. See NormalizationRules.canonical.
+            return baseId + "|" + NormalizationRules.canonical(normalized.getTagCompound());
         }
         return baseId;
     }
@@ -258,6 +252,35 @@ public class JourneyData implements IJourneyData {
     /**
      * Helper to reconstruct an ItemStack from a structured key.
      */
+    /**
+     * Rewrite a stored key into its current canonical spelling, for the schema 2 to 3 migration.
+     *
+     * <p>Only the NBT half is touched: re-parsed, re-run through the current strip rules, and
+     * re-emitted with sorted keys, so an old key lines up with what a fresh deposit produces today.
+     *
+     * <p>Two deliberate limits, both consequences of what 1.8.1 already threw away. A bare key (no
+     * '|') stays bare - if the item's identity lived in NBT that 1.8.1 stripped, that information
+     * is not in the file and cannot be invented, so the entry stays a base-item unlock and keeps
+     * working. And if the NBT fails to parse, the key is returned untouched rather than dropped:
+     * never lose an unlock to a parse error.
+     */
+    public static String canonicaliseKey(String key) {
+        if (key == null || key.isEmpty()) return key;
+        int delimiter = key.indexOf('|');
+        if (delimiter == -1) return key;
+
+        String itemId = key.substring(0, delimiter);
+        String nbt = key.substring(delimiter + 1);
+        try {
+            NBTTagCompound parsed = net.minecraft.nbt.JsonToNBT.getTagFromJson(nbt);
+            NBTTagCompound cleaned = NormalizationRules.strip(parsed);
+            if (cleaned.getKeySet().isEmpty()) return itemId;
+            return itemId + "|" + NormalizationRules.canonical(cleaned);
+        } catch (Exception e) {
+            return key;
+        }
+    }
+
     public static ItemStack itemStackFromKey(String key) {
         if (key == null || key.isEmpty()) return ItemStack.EMPTY;
         int delimiter = key.indexOf('|');
@@ -293,7 +316,12 @@ public class JourneyData implements IJourneyData {
 
     @Override
     public int getThreshold(Item item) {
-        return recipeCalculator.calculateThreshold(item);
+        RecipeDepthCalculator calculator = ThresholdTable.get();
+        if (calculator != null) {
+            return calculator.calculateThreshold(item);
+        }
+        // Fallback if nothing has bound recipes yet (no world loaded)
+        return item.getItemStackLimit() == 1 ? 1 : UNLOCK_THRESHOLD;
     }
 
     @Override
@@ -317,6 +345,7 @@ public class JourneyData implements IJourneyData {
         int currentCount = collectedCounts.getOrDefault(key, 0);
         int newCount = currentCount + stack.getCount();
         collectedCounts.put(key, newCount);
+        catalogChanged();
 
         int threshold = getThreshold(stack);
         
@@ -405,15 +434,40 @@ public class JourneyData implements IJourneyData {
         return new HashSet<>(unlockedItems);
     }
 
+    // The sorted view is rebuilt only when the catalog actually changes. It used to allocate a
+    // fresh list of every unlocked key and run an O(n log n) sort - with two map lookups per
+    // comparison - on every call, and the Journey tab reaches this twice per rendered frame
+    // (item grid + tooltip pass). That is the same per-frame-recompute shape that caused the
+    // 1.8.0 deposit-screen freeze, just in a different method.
+    private java.util.List<String> sortedCache = null;
+    private int sortedCacheGeneration = -1;
+
     @Override
-    public List<String> getUnlockedItemsSorted() {
-        List<String> sortedItems = new ArrayList<>(unlockedItems);
-        sortedItems.sort((a, b) -> {
-            long timeA = unlockTimestamps.getOrDefault(a, 0L);
-            long timeB = unlockTimestamps.getOrDefault(b, 0L);
-            return Long.compare(timeB, timeA);
+    public java.util.List<String> getUnlockedItemsSorted() {
+        if (sortedCache != null && sortedCacheGeneration == syncGeneration) {
+            return sortedCache;
+        }
+        java.util.List<String> sortedItems = new java.util.ArrayList<String>(unlockedItems);
+        java.util.Collections.sort(sortedItems, new java.util.Comparator<String>() {
+            @Override
+            public int compare(String a, String b) {
+                long timeA = unlockTimestamps.containsKey(a) ? unlockTimestamps.get(a) : 0L;
+                long timeB = unlockTimestamps.containsKey(b) ? unlockTimestamps.get(b) : 0L;
+                return Long.compare(timeB, timeA); // Most recent first
+            }
         });
-        return sortedItems;
+        sortedCache = java.util.Collections.unmodifiableList(sortedItems);
+        sortedCacheGeneration = syncGeneration;
+        return sortedCache;
+    }
+
+    /**
+     * Invalidates every generation-keyed cache (the sorted catalog view above, the client's
+     * per-namespace stats breakdown). Anything that mutates the three catalog maps must call
+     * this, or a cached view will outlive the data it was built from.
+     */
+    private void catalogChanged() {
+        syncGeneration++;
     }
 
     @Override
@@ -484,6 +538,40 @@ public class JourneyData implements IJourneyData {
         this.teamDisplayName = (teamDisplayName == null || teamDisplayName.isEmpty()) ? null : teamDisplayName;
     }
 
+    /**
+     * Merge a partial sync into the existing catalog instead of replacing it.
+     *
+     * <p>A deposit changes exactly one entry, but the full-sync path re-sends the whole catalog to
+     * communicate that - thousands of keys to say one counter moved by one. A delta carries only
+     * what changed.
+     *
+     * <p>Removals are deliberately <b>not</b> expressible here. purge / revoke / reset / team
+     * join-leave all stay on the full-sync path, which keeps the merge unambiguous: a key absent
+     * from a delta means "unchanged", never "deleted". Getting that wrong would silently drop
+     * unlocks, so the ambiguity is removed by construction rather than by convention.
+     */
+    public void applyDelta(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps,
+                           boolean enabled, boolean showTooltips, String teamDisplayName) {
+        if (hasSyncedOnce) {
+            Set<String> newKeys = new HashSet<String>(unlocked);
+            newKeys.removeAll(this.unlockedItems);
+            this.pendingUnlockCelebration = newKeys;
+        } else {
+            // A delta arriving before any full sync would leave the catalog incomplete. Treat it
+            // as the first sync for celebration purposes; the login full-sync fills in the rest.
+            this.pendingUnlockCelebration = Collections.emptySet();
+            this.hasSyncedOnce = true;
+        }
+
+        this.collectedCounts.putAll(counts);
+        this.unlockedItems.addAll(unlocked);
+        this.unlockTimestamps.putAll(timestamps);
+        this.enabled = enabled;
+        this.showTooltips = showTooltips;
+        this.teamDisplayName = (teamDisplayName == null || teamDisplayName.isEmpty()) ? null : teamDisplayName;
+        this.syncGeneration++;
+    }
+
     @Override
     public String getTeamDisplayName() {
         return teamDisplayName;
@@ -534,6 +622,7 @@ public class JourneyData implements IJourneyData {
         this.unlockedItems.addAll(other.getUnlockedItems());
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(other.getUnlockTimestamps());
+        catalogChanged();
         this.enabled = other.isEnabled();
         this.showTooltips = other.isShowTooltips();
         this.teamId = other.getTeamId();
@@ -544,12 +633,14 @@ public class JourneyData implements IJourneyData {
         this.collectedCounts.clear();
         this.unlockedItems.clear();
         this.unlockTimestamps.clear();
+        catalogChanged();
     }
 
     @Override
     public void grant(String key) {
         unlockedItems.add(key);
         unlockTimestamps.put(key, System.currentTimeMillis());
+        catalogChanged();
     }
 
     @Override
@@ -557,6 +648,23 @@ public class JourneyData implements IJourneyData {
         unlockedItems.remove(key);
         unlockTimestamps.remove(key);
         collectedCounts.put(key, 0);
+        catalogChanged();
+    }
+
+    /**
+     * Remove an entry entirely - unlock, timestamp and collected count. Unlike revoke(), which
+     * zeroes the count so an op-revoked item can't instantly re-unlock, this erases the key
+     * outright so it stops appearing anywhere: the catalog grid, the stats totals and the sync
+     * payload. Used by /journeymode purge to get rid of an entry the client cannot render.
+     *
+     * @return true if the key was present in any of the three maps
+     */
+    public boolean purge(String key) {
+        boolean had = unlockedItems.remove(key);
+        had |= unlockTimestamps.remove(key) != null;
+        had |= collectedCounts.remove(key) != null;
+        if (had) catalogChanged();
+        return had;
     }
 
     @Override
@@ -571,5 +679,6 @@ public class JourneyData implements IJourneyData {
                 unlockTimestamps.put(key, System.currentTimeMillis());
             }
         }
+        catalogChanged();
     }
 }

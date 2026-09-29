@@ -51,7 +51,6 @@ public class JourneyDataAttachment {
     @Deprecated // Use dynamic threshold via RecipeDepthCalculator
     public static final int UNLOCK_THRESHOLD = 30; // Fallback value
     
-    private RecipeDepthCalculator recipeCalculator; // Lazily initialized
 
     public JourneyDataAttachment() {
         this.collectedCounts = new HashMap<>();
@@ -70,7 +69,12 @@ public class JourneyDataAttachment {
     /**
      * Serialize to JSON string
      */
-    public String toJsonString() {
+    /**
+     * Build the JSON form directly. GlobalDataHandler used to call toJsonString() and then
+     * immediately re-parse the result back into a JsonObject on every save - a pure
+     * serialize/parse round trip with no purpose, once per deposit.
+     */
+    public JsonObject toJsonObject() {
         JsonObject json = new JsonObject();
         
         JsonObject countsJson = new JsonObject();
@@ -91,7 +95,11 @@ public class JourneyDataAttachment {
             json.addProperty("team_id", teamId);
         }
 
-        return GSON.toJson(json);
+        return json;
+    }
+
+    public String toJsonString() {
+        return GSON.toJson(toJsonObject());
     }
 
     /**
@@ -144,19 +152,21 @@ public class JourneyDataAttachment {
      * Initialize the recipe calculator (called when needed)
      */
     public void initializeCalculator(RecipeManager recipeManager, RegistryAccess registryAccess) {
-        if (this.recipeCalculator == null) {
-            this.recipeCalculator = new RecipeDepthCalculator(recipeManager, registryAccess);
-        }
+        // Delegates to the one shared calculator (see ThresholdTable). This used to build a
+        // per-instance calculator, so every player carried their own full copy of the recipe
+        // index and their own depth cache.
+        ThresholdTable.bind(recipeManager, registryAccess);
     }
     
     /**
      * Get the unlock threshold for a specific item (dynamic based on recipe depth and stack size)
      */
     public int getThreshold(Item item) {
-        if (recipeCalculator != null) {
-            return recipeCalculator.calculateThreshold(item);
+        RecipeDepthCalculator calculator = ThresholdTable.get();
+        if (calculator != null) {
+            return calculator.calculateThreshold(item);
         }
-        // Fallback if calculator not initialized
+        // Fallback if nothing has bound recipes yet (no world loaded)
         return item.getMaxStackSize() == 1 ? 1 : UNLOCK_THRESHOLD;
     }
 
@@ -167,42 +177,25 @@ public class JourneyDataAttachment {
         if (original.isEmpty()) return original;
         ItemStack normalized = new ItemStack(original.getItem());
         if (original.hasTag()) {
-            CompoundTag originalTag = original.getTag();
-            CompoundTag normalizedTag = new CompoundTag();
-            boolean hasSubtype = false;
-            
-            if (originalTag.contains("Potion")) {
-                normalizedTag.putString("Potion", originalTag.getString("Potion"));
-                hasSubtype = true;
-            }
-            if (originalTag.contains("CustomPotionEffects")) {
-                normalizedTag.put("CustomPotionEffects", originalTag.get("CustomPotionEffects"));
-                hasSubtype = true;
-            }
-            if (originalTag.contains("CustomPotionColor")) {
-                normalizedTag.putInt("CustomPotionColor", originalTag.getInt("CustomPotionColor"));
-                hasSubtype = true;
-            }
-            if (originalTag.contains("StoredEnchantments")) {
-                normalizedTag.put("StoredEnchantments", originalTag.get("StoredEnchantments"));
-                hasSubtype = true;
-            }
-            if (originalTag.contains("Effects")) {
-                normalizedTag.put("Effects", originalTag.get("Effects"));
-                hasSubtype = true;
-            }
+            // Deny-by-exception (see NormalizationRules). 1.8.1 did the opposite - an allowlist of
+            // a handful of vanilla keys - which silently discarded every modded NBT identity and is
+            // what broke Apotheosis gems, TACZ guns, Iron's Spells scrolls and GregTech hammers.
+            CompoundTag cleaned = NormalizationRules.strip(original.getTag());
 
-            // Third-party NormalizationRules may contribute additional keys (denylisted
-            // container/block-entity keys are stripped inside the API before this returns).
-            for (String key : com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationKeys(originalTag)) {
-                if (originalTag.contains(key)) {
-                    normalizedTag.put(key, originalTag.get(key));
-                    hasSubtype = true;
+            // Third-party rules may contribute keys, but every one is re-checked against the
+            // strip rules first. JourneyModeAPI.DENYLISTED_KEYS is only four entries and does
+            // NOT cover ForgeCaps, backpacks, tanks and the rest of the container gate - taking
+            // the API at its word here would reopen the duplication hole outright.
+            for (String key : com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationKeys(original.getTag())) {
+                if (NormalizationRules.isStripped(key, key)) continue;
+                if (original.getTag().contains(key)
+                        && !cleaned.contains(key)) {
+                    cleaned.put(key, original.getTag().get(key).copy());
                 }
             }
 
-            if (hasSubtype) {
-                normalized.setTag(normalizedTag);
+            if (!cleaned.isEmpty()) {
+                normalized.setTag(cleaned);
             }
         }
         return normalized;
@@ -215,7 +208,10 @@ public class JourneyDataAttachment {
         ItemStack normalized = getNormalizedStack(stack);
         String baseId = Registry.ITEM.getKey(normalized.getItem()).toString();
         if (normalized.hasTag() && !normalized.getTag().isEmpty()) {
-            return baseId + "|" + normalized.getTag().toString();
+            // Canonical (recursively key-sorted) rather than toString(), whose order follows
+            // HashMap bucket layout and is therefore input-dependent once tags are copied from the
+            // source stack instead of rebuilt. See NormalizationRules.canonical.
+            return baseId + "|" + NormalizationRules.canonical(normalized.getTag());
         }
         return baseId;
     }
@@ -223,6 +219,35 @@ public class JourneyDataAttachment {
     /**
      * Helper to reconstruct an ItemStack from a structured key.
      */
+    /**
+     * Rewrite a stored key into its current canonical spelling, for the schema 2 to 3 migration.
+     *
+     * <p>Only the NBT half is touched: re-parsed, re-run through the current strip rules, and
+     * re-emitted with sorted keys, so an old key lines up with what a fresh deposit produces today.
+     *
+     * <p>Two deliberate limits, both consequences of what 1.8.1 already threw away. A bare key (no
+     * '|') stays bare - if the item's identity lived in NBT that 1.8.1 stripped, that information
+     * is not in the file and cannot be invented, so the entry stays a base-item unlock and keeps
+     * working. And if the NBT fails to parse, the key is returned untouched rather than dropped:
+     * never lose an unlock to a parse error.
+     */
+    public static String canonicaliseKey(String key) {
+        if (key == null || key.isEmpty()) return key;
+        int delimiter = key.indexOf('|');
+        if (delimiter == -1) return key;
+
+        String itemId = key.substring(0, delimiter);
+        String nbt = key.substring(delimiter + 1);
+        try {
+            CompoundTag parsed = TagParser.parseTag(nbt);
+            CompoundTag cleaned = NormalizationRules.strip(parsed);
+            if (cleaned.isEmpty()) return itemId;
+            return itemId + "|" + NormalizationRules.canonical(cleaned);
+        } catch (Exception e) {
+            return key;
+        }
+    }
+
     public static ItemStack itemStackFromKey(String key) {
         if (key == null || key.isEmpty()) return ItemStack.EMPTY;
         int delimiter = key.indexOf('|');
@@ -258,6 +283,7 @@ public class JourneyDataAttachment {
         int currentCount = collectedCounts.getOrDefault(key, 0);
         int newCount = currentCount + stack.getCount();
         collectedCounts.put(key, newCount);
+        catalogChanged();
 
         int threshold = getThreshold(stack.getItem());
         
@@ -276,6 +302,7 @@ public class JourneyDataAttachment {
     public void grant(String key) {
         unlockedItems.add(key);
         unlockTimestamps.put(key, System.currentTimeMillis());
+        catalogChanged();
     }
 
     /**
@@ -287,6 +314,23 @@ public class JourneyDataAttachment {
         unlockedItems.remove(key);
         unlockTimestamps.remove(key);
         collectedCounts.put(key, 0);
+        catalogChanged();
+    }
+
+    /**
+     * Remove an entry entirely - unlock, timestamp and collected count. Unlike revoke(), which
+     * zeroes the count so an op-revoked item can't instantly re-unlock, this erases the key
+     * outright so it stops appearing anywhere: the catalog grid, the stats totals and the sync
+     * payload. Used by /journeymode purge to get rid of an entry the client cannot render.
+     *
+     * @return true if the key was present in any of the three maps
+     */
+    public boolean purge(String key) {
+        boolean had = unlockedItems.remove(key);
+        had |= unlockTimestamps.remove(key) != null;
+        had |= collectedCounts.remove(key) != null;
+        if (had) catalogChanged();
+        return had;
     }
 
     /**
@@ -308,6 +352,7 @@ public class JourneyDataAttachment {
                 unlockTimestamps.put(key, System.currentTimeMillis());
             }
         }
+        catalogChanged();
     }
 
     /**
@@ -400,14 +445,39 @@ public class JourneyDataAttachment {
     /**
      * Get unlocked items sorted by timestamp (most recent first)
      */
-    public List<String> getUnlockedItemsSorted() {
-        List<String> sortedItems = new ArrayList<>(unlockedItems);
-        sortedItems.sort((a, b) -> {
-            long timeA = unlockTimestamps.getOrDefault(a, 0L);
-            long timeB = unlockTimestamps.getOrDefault(b, 0L);
-            return Long.compare(timeB, timeA); // Most recent first
+    // The sorted view is rebuilt only when the catalog actually changes. It used to allocate a
+    // fresh list of every unlocked key and run an O(n log n) sort - with two map lookups per
+    // comparison - on every call, and the Journey tab reaches this twice per rendered frame
+    // (item grid + tooltip pass). That is the same per-frame-recompute shape that caused the
+    // 1.8.0 deposit-screen freeze, just in a different method.
+    private java.util.List<String> sortedCache = null;
+    private int sortedCacheGeneration = -1;
+
+    public java.util.List<String> getUnlockedItemsSorted() {
+        if (sortedCache != null && sortedCacheGeneration == syncGeneration) {
+            return sortedCache;
+        }
+        java.util.List<String> sortedItems = new java.util.ArrayList<String>(unlockedItems);
+        java.util.Collections.sort(sortedItems, new java.util.Comparator<String>() {
+            @Override
+            public int compare(String a, String b) {
+                long timeA = unlockTimestamps.containsKey(a) ? unlockTimestamps.get(a) : 0L;
+                long timeB = unlockTimestamps.containsKey(b) ? unlockTimestamps.get(b) : 0L;
+                return Long.compare(timeB, timeA); // Most recent first
+            }
         });
-        return sortedItems;
+        sortedCache = java.util.Collections.unmodifiableList(sortedItems);
+        sortedCacheGeneration = syncGeneration;
+        return sortedCache;
+    }
+
+    /**
+     * Invalidates every generation-keyed cache (the sorted catalog view above, the client's
+     * per-namespace stats breakdown). Anything that mutates the three catalog maps must call
+     * this, or a cached view will outlive the data it was built from.
+     */
+    private void catalogChanged() {
+        syncGeneration++;
     }
     
     /**
@@ -499,6 +569,40 @@ public class JourneyDataAttachment {
         this.teamDisplayName = (teamDisplayName == null || teamDisplayName.isEmpty()) ? null : teamDisplayName;
     }
 
+    /**
+     * Merge a partial sync into the existing catalog instead of replacing it.
+     *
+     * <p>A deposit changes exactly one entry, but the full-sync path re-sends the whole catalog to
+     * communicate that - thousands of keys to say one counter moved by one. A delta carries only
+     * what changed.
+     *
+     * <p>Removals are deliberately <b>not</b> expressible here. purge / revoke / reset / team
+     * join-leave all stay on the full-sync path, which keeps the merge unambiguous: a key absent
+     * from a delta means "unchanged", never "deleted". Getting that wrong would silently drop
+     * unlocks, so the ambiguity is removed by construction rather than by convention.
+     */
+    public void applyDelta(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps,
+                           boolean enabled, boolean showTooltips, String teamDisplayName) {
+        if (hasSyncedOnce) {
+            Set<String> newKeys = new HashSet<String>(unlocked);
+            newKeys.removeAll(this.unlockedItems);
+            this.pendingUnlockCelebration = newKeys;
+        } else {
+            // A delta arriving before any full sync would leave the catalog incomplete. Treat it
+            // as the first sync for celebration purposes; the login full-sync fills in the rest.
+            this.pendingUnlockCelebration = Collections.emptySet();
+            this.hasSyncedOnce = true;
+        }
+
+        this.collectedCounts.putAll(counts);
+        this.unlockedItems.addAll(unlocked);
+        this.unlockTimestamps.putAll(timestamps);
+        this.enabled = enabled;
+        this.showTooltips = showTooltips;
+        this.teamDisplayName = (teamDisplayName == null || teamDisplayName.isEmpty()) ? null : teamDisplayName;
+        this.syncGeneration++;
+    }
+
     /** Client-side only: the team's display name for the badge, or null if not on a team. */
     public String getTeamDisplayName() {
         return teamDisplayName;
@@ -555,6 +659,7 @@ public class JourneyDataAttachment {
         this.unlockedItems.addAll(other.unlockedItems);
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(other.unlockTimestamps);
+        catalogChanged();
         this.enabled = other.enabled;
         this.showTooltips = other.showTooltips;
         this.teamId = other.teamId;
@@ -567,5 +672,6 @@ public class JourneyDataAttachment {
         this.collectedCounts.clear();
         this.unlockedItems.clear();
         this.unlockTimestamps.clear();
+        catalogChanged();
     }
 }

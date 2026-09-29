@@ -1,6 +1,7 @@
 package com.aryangpt007.journeymode.client.gui;
 
 import com.aryangpt007.journeymode.JourneyMode;
+import com.aryangpt007.journeymode.client.SafeCatalogRender;
 import com.aryangpt007.journeymode.data.JourneyDataAttachment;
 import com.aryangpt007.journeymode.menu.JourneyModeMenu;
 import com.aryangpt007.journeymode.network.FabricNetworkHandler;
@@ -329,8 +330,8 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
 
         String latestKey = com.aryangpt007.journeymode.client.CatalogStatsCache.getMostRecentlyUnlockedKey(data);
         if (latestKey != null) {
-            ItemStack latestStack = JourneyDataAttachment.itemStackFromKey(latestKey);
-            String latestName = latestStack.isEmpty() ? latestKey : latestStack.getHoverName().getString();
+            ItemStack latestStack = SafeCatalogRender.stackFor(latestKey);
+            String latestName = SafeCatalogRender.nameFor(latestKey, latestStack);
             this.font.draw(poseStack, fitToWidth("Latest: " + latestName, STATS_ROW_WIDTH), x + 8, y + STATS_LATEST_Y, 0x606060);
         }
     }
@@ -386,8 +387,7 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
 
         for (int i = startIndex; i < endIndex; i++) {
             String key = unlockedItems.get(i);
-            ItemStack stack = JourneyDataAttachment.itemStackFromKey(key);
-            if (stack.isEmpty()) continue;
+            ItemStack stack = SafeCatalogRender.stackFor(key);
             
             int gridIndex = i - startIndex;
             int row = gridIndex / ITEMS_PER_ROW;
@@ -399,8 +399,20 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             fill(poseStack, itemX - 1, itemY - 1, itemX + 17, itemY + 17, 0xFF373737);
             fill(poseStack, itemX, itemY, itemX + 16, itemY + 16, 0xFF8B8B8B);
             
-            this.itemRenderer.renderAndDecorateItem(stack, itemX, itemY);
-            this.itemRenderer.renderGuiItemDecorations(this.font, stack, itemX, itemY);
+            // An entry that cannot be rebuilt, or whose owning mod throws while rendering
+            // it, gets a visible marker rather than a silent gap - the player has to be
+            // able to find it in order to purge it.
+            if (stack.isEmpty()) {
+                this.fillGradient(poseStack, itemX + 3, itemY + 3, itemX + 13, itemY + 13, 0xFFB02020, 0xFFB02020);
+            } else {
+                try {
+                    this.itemRenderer.renderAndDecorateItem(stack, itemX, itemY);
+                    this.itemRenderer.renderGuiItemDecorations(this.font, stack, itemX, itemY);
+                } catch (Throwable t) {
+                    SafeCatalogRender.markBroken(key, "item rendering", t);
+                    this.fillGradient(poseStack, itemX + 3, itemY + 3, itemX + 13, itemY + 13, 0xFFB02020, 0xFFB02020);
+                }
+            }
             
             if (mouseX >= itemX && mouseX < itemX + 16 && mouseY >= itemY && mouseY < itemY + 16) {
                 fill(poseStack, itemX, itemY, itemX + 16, itemY + 16, 0x80FFFFFF);
@@ -427,18 +439,21 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
             return items;
         }
 
-        if (searchQuery.equals(cachedFilterQuery) && items.equals(cachedFilterSource)) {
+        // getUnlockedItemsSorted() now returns a stable cached instance that is only replaced
+        // when the catalog changes, so identity is both sufficient and O(1) here. The old
+        // equals() walked every key in the catalog on every rendered frame.
+        if (searchQuery.equals(cachedFilterQuery) && items == cachedFilterSource) {
             return cachedFilterResult;
         }
 
         List<String> filtered = new ArrayList<>();
         for (String key : items) {
-            ItemStack stack = JourneyDataAttachment.itemStackFromKey(key);
-            if (!stack.isEmpty()) {
-                String itemName = stack.getHoverName().getString().toLowerCase();
-                if (itemName.contains(searchQuery)) {
-                    filtered.add(key);
-                }
+            // Broken entries fall back to matching on their raw key, which is what makes them
+            // findable by search - and therefore purgeable - instead of invisible.
+            ItemStack stack = SafeCatalogRender.stackFor(key);
+            String itemName = SafeCatalogRender.nameFor(key, stack).toLowerCase();
+            if (itemName.contains(searchQuery)) {
+                filtered.add(key);
             }
         }
 
@@ -472,12 +487,35 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                 int itemY = y + 18 + row * 18;
 
                 if (mouseX >= itemX && mouseX < itemX + 16 && mouseY >= itemY && mouseY < itemY + 16) {
-                    ItemStack stack = JourneyDataAttachment.itemStackFromKey(key);
-                    this.renderTooltip(poseStack, stack, mouseX, mouseY);
+                    renderEntryTooltip(poseStack, key, mouseX, mouseY);
                     break;
                 }
             }
         }
+    }
+
+    /**
+     * Tooltip for one catalog entry. The stack handed to renderTooltip is reconstructed from a
+     * stored key, and a mod that considers it malformed can throw from inside its own tooltip
+     * code - which, unguarded, kills the client every time the cursor crosses this slot. On
+     * failure the entry is marked broken and a plain-text tooltip naming the key is drawn
+     * instead, so the player can read it and purge it.
+     */
+    private void renderEntryTooltip(PoseStack poseStack, String key, int mouseX, int mouseY) {
+        ItemStack stack = SafeCatalogRender.stackFor(key);
+        if (!stack.isEmpty()) {
+            try {
+                this.renderTooltip(poseStack, stack, mouseX, mouseY);
+                return;
+            } catch (Throwable t) {
+                SafeCatalogRender.markBroken(key, "tooltip rendering", t);
+            }
+        }
+        List<Component> lines = new ArrayList<>();
+        lines.add(new TextComponent("\u00a7cUnreadable entry"));
+        lines.add(new TextComponent("\u00a77" + key));
+        lines.add(new TextComponent("\u00a78/journeymode purge " + key));
+        this.renderComponentTooltip(poseStack, lines, mouseX, mouseY);
     }
 
     @Override
@@ -584,7 +622,14 @@ public class JourneyModeScreen extends AbstractContainerScreen<JourneyModeMenu> 
                     // 16, and mods declare their own limits. Ask the reconstructed stack instead
                     // of assuming - the server clamps to the same limit independently, since it
                     // cannot trust a count that arrived over the network.
-                    ItemStack requested = JourneyDataAttachment.itemStackFromKey(itemId);
+                    ItemStack requested = SafeCatalogRender.stackFor(itemId);
+                    if (requested.isEmpty()) {
+                        // Broken entry - the server can't hand back anything meaningful, so don't
+                        // ask. Tell the player how to get rid of it instead.
+                        this.minecraft.player.displayClientMessage(new TextComponent(
+                            "\u00a7cThat entry can't be rebuilt. Remove it with \u00a7f/journeymode purge " + itemId), false);
+                        return true;
+                    }
                     int count = hasShiftDown() ? Math.max(1, requested.getMaxStackSize()) : 1;
                     FabricNetworkHandler.requestItem(itemId, count);
                     return true;

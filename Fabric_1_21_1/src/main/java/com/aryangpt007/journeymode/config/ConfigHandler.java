@@ -44,6 +44,15 @@ public class ConfigHandler {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir().resolve("Journey Mode");
+
+    /**
+     * The Journey Mode config directory as a plain File, so loader-independent config
+     * readers (see SaveScopeConfig) can be byte-identical across all nine environments
+     * instead of each needing its own Path/File and loader-specific lookup.
+     */
+    public static java.io.File getConfigDir() {
+        return CONFIG_DIR.toFile();
+    }
     private static final Path BLACKLIST_FILE = CONFIG_DIR.resolve("blacklist.json");
     private static final Path THRESHOLDS_FILE = CONFIG_DIR.resolve("custom_thresholds.json");
 

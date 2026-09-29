@@ -19,9 +19,19 @@ import java.util.*;
  * ceiling) is already required here for the Map/Set fields, so the extra String rides along
  * for free.
  */
-public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled, boolean showTooltips, String teamDisplayName) implements CustomPacketPayload {
+public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled, boolean showTooltips, String teamDisplayName, boolean delta) implements CustomPacketPayload {
     public SyncJourneyDataPacket {
         teamDisplayName = teamDisplayName == null ? "" : teamDisplayName;
+    }
+
+    /**
+     * True when this payload carries only the entries that changed, to be merged into the
+     * client's existing catalog rather than replacing it. A deposit changes one entry; without
+     * this the server re-sent the whole catalog to say so. Full syncs (login, reset, purge,
+     * revoke, team join/leave) keep delta=false, because a delta cannot express a removal.
+     */
+    public SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled, boolean showTooltips, String teamDisplayName) {
+        this(collectedCounts, unlockedItems, unlockTimestamps, enabled, showTooltips, teamDisplayName, false);
     }
 
     public static final Type<SyncJourneyDataPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(JourneyMode.MODID, "sync_journey_data"));
@@ -48,6 +58,7 @@ public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<St
         ByteBufCodecs.BOOL.encode(buf, packet.enabled);
         ByteBufCodecs.BOOL.encode(buf, packet.showTooltips);
         ByteBufCodecs.STRING_UTF8.encode(buf, packet.teamDisplayName);
+        ByteBufCodecs.BOOL.encode(buf, packet.delta);
     }
 
     private static SyncJourneyDataPacket decode(RegistryFriendlyByteBuf buf) {
@@ -57,7 +68,8 @@ public record SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<St
         boolean enabled = ByteBufCodecs.BOOL.decode(buf);
         boolean showTooltips = ByteBufCodecs.BOOL.decode(buf);
         String teamDisplayName = ByteBufCodecs.STRING_UTF8.decode(buf);
-        return new SyncJourneyDataPacket(collectedCounts, unlockedItems, unlockTimestamps, enabled, showTooltips, teamDisplayName);
+        boolean delta = ByteBufCodecs.BOOL.decode(buf);
+        return new SyncJourneyDataPacket(collectedCounts, unlockedItems, unlockTimestamps, enabled, showTooltips, teamDisplayName, delta);
     }
 
     @Override

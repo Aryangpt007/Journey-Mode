@@ -55,6 +55,15 @@ public class ConfigHandler {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static final File CONFIG_DIR = new File("config/Journey Mode");
+
+    /**
+     * The Journey Mode config directory as a plain File, so loader-independent config
+     * readers (see SaveScopeConfig) can be byte-identical across all nine environments
+     * instead of each needing its own Path/File and loader-specific lookup.
+     */
+    public static java.io.File getConfigDir() {
+        return CONFIG_DIR;
+    }
     private static final File BLACKLIST_FILE = new File(CONFIG_DIR, "blacklist.json");
     private static final File THRESHOLDS_FILE = new File(CONFIG_DIR, "custom_thresholds.json");
 

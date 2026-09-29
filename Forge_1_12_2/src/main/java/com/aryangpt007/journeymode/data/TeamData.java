@@ -32,7 +32,6 @@ public class TeamData {
     // Own calculator instance - 1.12.2's RecipeDepthCalculator takes no constructor args (it
     // reads CraftingManager.REGISTRY directly), unlike the 1.20.1 reference which needs a
     // RecipeManager/RegistryAccess pair threaded through. Nothing to lazily initialize here.
-    private final RecipeDepthCalculator recipeCalculator = new RecipeDepthCalculator();
 
     public TeamData(String id, String displayName, UUID ownerUuid) {
         this.id = id;
@@ -48,7 +47,12 @@ public class TeamData {
     public Set<UUID> getMembers() { return members; }
 
     public int getThreshold(Item item) {
-        return recipeCalculator.calculateThreshold(item);
+        RecipeDepthCalculator calculator = ThresholdTable.get();
+        if (calculator != null) {
+            return calculator.calculateThreshold(item);
+        }
+        // Fallback if nothing has bound recipes yet (no world loaded)
+        return 1;
     }
 
     /** @return true if this deposit crossed the threshold and unlocked the item for the whole team. */
@@ -69,6 +73,32 @@ public class TeamData {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Remove an entry entirely from the shared catalog - unlock, timestamp and collected count.
+     * Owner-only at the call site (see /journeymode purge); this class does not enforce that.
+     *
+     * @return true if the key was present in any of the three maps
+     */
+    /**
+     * Seed an unlock while preserving its original timestamp.
+     *
+     * <p>grant() stamps System.currentTimeMillis(), which is right for a genuine new unlock but
+     * wrong for seeding: pushing 3,000 inherited items through it would give them all one identical
+     * timestamp, making the Journey grid's newest-first ordering and the Stats tab's "Latest:" line
+     * meaningless for that team.
+     */
+    public void grantAt(String key, long timestamp) {
+        unlockedItems.add(key);
+        unlockTimestamps.put(key, timestamp);
+    }
+
+    public boolean purge(String key) {
+        boolean had = unlockedItems.remove(key);
+        had |= unlockTimestamps.remove(key) != null;
+        had |= collectedCounts.remove(key) != null;
+        return had;
     }
 
     public boolean isUnlocked(String key) {

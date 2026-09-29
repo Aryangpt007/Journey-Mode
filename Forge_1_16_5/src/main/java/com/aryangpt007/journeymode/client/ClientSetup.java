@@ -68,7 +68,11 @@ public class ClientSetup {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
             mc.player.getCapability(com.aryangpt007.journeymode.data.JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY).ifPresent(data -> {
-                data.updateFromSync(msg.getCollectedCounts(), msg.getUnlockedItems(), msg.getUnlockTimestamps(), msg.isEnabled(), msg.isShowTooltips(), msg.getTeamDisplayName());
+                if (msg.isDelta()) {
+                    data.applyDelta(msg.getCollectedCounts(), msg.getUnlockedItems(), msg.getUnlockTimestamps(), msg.isEnabled(), msg.isShowTooltips(), msg.getTeamDisplayName());
+                } else {
+                    data.updateFromSync(msg.getCollectedCounts(), msg.getUnlockedItems(), msg.getUnlockTimestamps(), msg.isEnabled(), msg.isShowTooltips(), msg.getTeamDisplayName());
+                }
                 celebrateNewUnlocks(mc, data.getAndClearNewlyUnlocked());
             });
         }

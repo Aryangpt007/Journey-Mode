@@ -20,6 +20,14 @@ public class SyncJourneyDataPacket implements IMessage {
     private boolean showTooltips;
     private String teamDisplayName; // empty string = no team
 
+    /**
+     * True when this payload carries only the entries that changed, to be merged into the
+     * client's existing catalog rather than replacing it. A deposit changes one entry; without
+     * this the server re-sent the whole catalog to say so. Full syncs (login, reset, purge,
+     * revoke, team join/leave) keep delta=false, because a delta cannot express a removal.
+     */
+    private boolean delta;
+
     public SyncJourneyDataPacket() {
         this.collectedCounts = new HashMap<>();
         this.unlockedItems = new HashSet<>();
@@ -27,6 +35,7 @@ public class SyncJourneyDataPacket implements IMessage {
         this.enabled = true;
         this.showTooltips = true;
         this.teamDisplayName = "";
+        this.delta = false;
     }
 
     /**
@@ -43,6 +52,12 @@ public class SyncJourneyDataPacket implements IMessage {
         this.enabled = enabled;
         this.showTooltips = showTooltips;
         this.teamDisplayName = teamDisplayName == null ? "" : teamDisplayName;
+        this.delta = false;
+    }
+
+    public SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled, boolean showTooltips, String teamDisplayName, boolean delta) {
+        this(collectedCounts, unlockedItems, unlockTimestamps, enabled, showTooltips, teamDisplayName);
+        this.delta = delta;
     }
 
     @Override
@@ -70,6 +85,7 @@ public class SyncJourneyDataPacket implements IMessage {
             enabled = packetBuffer.readBoolean();
             showTooltips = packetBuffer.readBoolean();
             teamDisplayName = packetBuffer.readString(32767);
+            delta = packetBuffer.readBoolean();
         } catch (Exception ignored) {}
     }
 
@@ -93,6 +109,7 @@ public class SyncJourneyDataPacket implements IMessage {
         packetBuffer.writeBoolean(enabled);
         packetBuffer.writeBoolean(showTooltips);
         packetBuffer.writeString(teamDisplayName);
+        packetBuffer.writeBoolean(delta);
     }
 
     public static class Handler implements IMessageHandler<SyncJourneyDataPacket, IMessage> {
@@ -109,7 +126,11 @@ public class SyncJourneyDataPacket implements IMessage {
                 if (player != null) {
                     IJourneyData data = player.getCapability(JourneyDataCapabilityProvider.JOURNEY_DATA_CAPABILITY, null);
                     if (data != null) {
-                        data.updateFromSync(message.collectedCounts, message.unlockedItems, message.unlockTimestamps, message.enabled, message.showTooltips, message.teamDisplayName);
+                        if (message.delta) {
+                            data.applyDelta(message.collectedCounts, message.unlockedItems, message.unlockTimestamps, message.enabled, message.showTooltips, message.teamDisplayName);
+                        } else {
+                            data.updateFromSync(message.collectedCounts, message.unlockedItems, message.unlockTimestamps, message.enabled, message.showTooltips, message.teamDisplayName);
+                        }
                         celebrateNewUnlocks(player, data.getAndClearNewlyUnlocked());
                     }
                 }

@@ -117,6 +117,25 @@ public class TeamDataHandler {
     }
 
     public static synchronized String createTeam(MinecraftServer server, ServerPlayer owner, String name) {
+        return createTeam(server, owner, name, false);
+    }
+
+    /**
+     * @param inheritUnlocks seed the new team's shared catalog from the creator's own unlocks.
+     *
+     * <p>Seeding <b>copies</b>; the creator's personal set is left completely intact, exactly as
+     * leaveTeam already does in the other direction. If the team is later left or disbanded they
+     * still have everything they walked in with.
+     *
+     * <p>Unlocks and their timestamps only - never collected counts. That is symmetric with the
+     * existing leave snapshot: partial progress toward a threshold is personal effort, and pooling
+     * it would let a team bank the same partial deposits twice.
+     *
+     * <p>Only the creator, only at creation, when they are by definition the sole member - so this
+     * can never dump one player's collection onto people already in a team. A joining player
+     * seeding the shared catalog is a different feature with a different consent question.
+     */
+    public static synchronized String createTeam(MinecraftServer server, ServerPlayer owner, String name, boolean inheritUnlocks) {
         String id = name.toLowerCase();
         if (teams.containsKey(id)) {
             return "A team named '" + name + "' already exists.";
@@ -130,8 +149,33 @@ public class TeamDataHandler {
         teams.put(id, team);
         playerTeam.put(owner.getUUID(), id);
         setPlayerTeamId(owner, id);
+        if (inheritUnlocks) {
+            seedFromCreator(owner, team);
+        }
+
         save(server);
         return null; // null = success
+    }
+
+    /**
+     * Copy the creator's unlocks into the brand-new team. Unlocks and timestamps only - collected
+     * counts stay personal, and the creator's own set is never touched.
+     */
+    private static void seedFromCreator(ServerPlayer owner, TeamData team) {
+        JourneyDataAttachment personal = GlobalDataHandler.getPlayerData(owner);
+        if (personal == null) return;
+
+        java.util.Map<String, Long> stamps = personal.getUnlockTimestamps();
+        int seeded = 0;
+        for (String key : personal.getUnlockedItems()) {
+            Long when = stamps.get(key);
+            // grantAt, not grant: preserve the original unlock time so newest-first ordering and
+            // the Stats "Latest:" line stay meaningful instead of collapsing to one instant.
+            team.grantAt(key, when == null ? System.currentTimeMillis() : when.longValue());
+            seeded++;
+        }
+        LOGGER.info("Seeded team '{}' with {} unlock(s) from its creator (copied, not moved).",
+            team.getDisplayName(), seeded);
     }
 
     public static synchronized String joinTeam(MinecraftServer server, ServerPlayer player, String name) {

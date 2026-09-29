@@ -19,7 +19,20 @@ public class SyncJourneyDataPacket {
     private final boolean showTooltips;
     private final String teamDisplayName; // empty string = no team
 
+    /**
+     * True when this payload carries only the entries that changed, to be merged into the
+     * client's existing catalog rather than replacing it. A deposit changes one entry; without
+     * this the server re-sent the whole catalog to say so. Full syncs (login, reset, purge,
+     * revoke, team join/leave) keep delta=false, because a delta cannot express a removal.
+     */
+    private final boolean delta;
+
     public SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled, boolean showTooltips, String teamDisplayName) {
+        this(collectedCounts, unlockedItems, unlockTimestamps, enabled, showTooltips, teamDisplayName, false);
+    }
+
+    public SyncJourneyDataPacket(Map<String, Integer> collectedCounts, Set<String> unlockedItems, Map<String, Long> unlockTimestamps, boolean enabled, boolean showTooltips, String teamDisplayName, boolean delta) {
+        this.delta = delta;
         this.collectedCounts = collectedCounts;
         this.unlockedItems = unlockedItems;
         this.unlockTimestamps = unlockTimestamps;
@@ -48,6 +61,10 @@ public class SyncJourneyDataPacket {
         return showTooltips;
     }
 
+    public boolean isDelta() {
+        return delta;
+    }
+
     public String getTeamDisplayName() {
         return teamDisplayName;
     }
@@ -70,6 +87,7 @@ public class SyncJourneyDataPacket {
         buf.writeBoolean(msg.enabled);
         buf.writeBoolean(msg.showTooltips);
         buf.writeUtf(msg.teamDisplayName);
+        buf.writeBoolean(msg.delta);
     }
 
     public static SyncJourneyDataPacket decode(PacketBuffer buf) {
@@ -93,7 +111,8 @@ public class SyncJourneyDataPacket {
         boolean enabled = buf.readBoolean();
         boolean showTooltips = buf.readBoolean();
         String teamDisplayName = buf.readUtf(32767);
-        return new SyncJourneyDataPacket(collectedCounts, unlockedItems, unlockTimestamps, enabled, showTooltips, teamDisplayName);
+        boolean delta = buf.readBoolean();
+        return new SyncJourneyDataPacket(collectedCounts, unlockedItems, unlockTimestamps, enabled, showTooltips, teamDisplayName, delta);
     }
 
     public static void handle(SyncJourneyDataPacket msg, Supplier<NetworkEvent.Context> ctx) {

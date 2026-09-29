@@ -171,12 +171,17 @@ public class FabricNetworkHandler {
             boolean enabled = buf.readBoolean();
             boolean showTooltips = buf.readBoolean();
             String teamDisplayName = buf.readUtf();
+            boolean delta = buf.readBoolean();
 
             client.execute(() -> {
                 Player player = client.player;
                 if (player != null) {
                     JourneyDataAttachment data = GlobalDataHandler.getPlayerData(player);
-                    data.updateFromSync(counts, unlocked, timestamps, enabled, showTooltips, teamDisplayName);
+                    if (delta) {
+                        data.applyDelta(counts, unlocked, timestamps, enabled, showTooltips, teamDisplayName);
+                    } else {
+                        data.updateFromSync(counts, unlocked, timestamps, enabled, showTooltips, teamDisplayName);
+                    }
                     celebrateNewUnlocks(player, data.getAndClearNewlyUnlocked());
                 }
             });
@@ -217,6 +222,18 @@ public class FabricNetworkHandler {
     public static void syncToPlayer(ServerPlayer player, Map<String, Integer> counts, Set<String> unlocked,
                                      Map<String, Long> timestamps, boolean enabled, boolean showTooltips,
                                      String teamDisplayName) {
+        syncToPlayer(player, counts, unlocked, timestamps, enabled, showTooltips, teamDisplayName, false);
+    }
+
+    /**
+     * True when this payload carries only the entries that changed, to be merged into the
+     * client's existing catalog rather than replacing it. A deposit changes one entry; without
+     * this the server re-sent the whole catalog to say so. Full syncs (login, reset, purge,
+     * revoke, team join/leave) keep delta=false, because a delta cannot express a removal.
+     */
+    public static void syncToPlayer(ServerPlayer player, Map<String, Integer> counts, Set<String> unlocked,
+                                     Map<String, Long> timestamps, boolean enabled, boolean showTooltips,
+                                     String teamDisplayName, boolean delta) {
         FriendlyByteBuf buf = PacketByteBufs.create();
 
         buf.writeVarInt(counts.size());
@@ -237,6 +254,7 @@ public class FabricNetworkHandler {
         buf.writeBoolean(enabled);
         buf.writeBoolean(showTooltips);
         buf.writeUtf(teamDisplayName == null ? "" : teamDisplayName);
+        buf.writeBoolean(delta);
 
         ServerPlayNetworking.send(player, SYNC_JOURNEY_DATA, buf);
     }

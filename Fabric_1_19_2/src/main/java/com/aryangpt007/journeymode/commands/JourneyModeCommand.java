@@ -53,7 +53,13 @@ public class JourneyModeCommand {
                 .then(Commands.literal("team")
                     .then(Commands.literal("create")
                         .then(Commands.argument("name", com.mojang.brigadier.arguments.StringArgumentType.word())
-                            .executes(context -> teamCreate(context.getSource(), com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name")))))
+                            // Both literals are spelled out even though "fresh" is the default, so
+                            // tab-completion documents the choice rather than hiding it.
+                            .then(Commands.literal("fresh")
+                                .executes(context -> teamCreate(context.getSource(), com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name"), false)))
+                            .then(Commands.literal("inherit")
+                                .executes(context -> teamCreate(context.getSource(), com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name"), true)))
+                            .executes(context -> teamCreate(context.getSource(), com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name"), false))))
                     .then(Commands.literal("join")
                         .then(Commands.argument("name", com.mojang.brigadier.arguments.StringArgumentType.word())
                             .executes(context -> teamJoin(context.getSource(), com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name")))))
@@ -67,6 +73,16 @@ public class JourneyModeCommand {
                     .then(Commands.literal("transfer")
                         .then(Commands.argument("player", com.mojang.brigadier.arguments.StringArgumentType.word())
                             .executes(context -> teamTransfer(context.getSource(), com.mojang.brigadier.arguments.StringArgumentType.getString(context, "player"))))))
+                .then(Commands.literal("save")
+                    .then(Commands.literal("info")
+                        .executes(context -> saveInfo(context.getSource())))
+                    .then(Commands.literal("reset")
+                        .then(Commands.literal("confirm")
+                            .executes(context -> saveReset(context.getSource())))
+                        .executes(context -> saveResetWarn(context.getSource()))))
+                .then(Commands.literal("purge")
+                    .then(Commands.argument("key", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                        .executes(JourneyModeCommand::purgeEntry)))
                 .then(Commands.literal("reloadconfig")
                     .requires(source -> source.hasPermission(2))
                     .executes(JourneyModeCommand::reloadConfig))
@@ -189,17 +205,19 @@ public class JourneyModeCommand {
 
     // ---------------------------------------------------------------- §1 /journeymode team
 
-    private static int teamCreate(CommandSourceStack source, String name) {
+    private static int teamCreate(CommandSourceStack source, String name, boolean inherit) {
         if (!(source.getEntity() instanceof ServerPlayer player)) {
             source.sendFailure(Component.literal("This command can only be used by players"));
             return 0;
         }
-        String error = com.aryangpt007.journeymode.data.TeamDataHandler.createTeam(source.getServer(), player, name);
+        String error = com.aryangpt007.journeymode.data.TeamDataHandler.createTeam(source.getServer(), player, name, inherit);
         if (error != null) {
             source.sendFailure(Component.literal(error));
             return 0;
         }
-        source.sendSuccess(Component.literal("Created team '" + name + "'. You're the owner."), false);
+        source.sendSuccess(Component.literal("Created team '" + name + "'. You're the owner." + (inherit
+            ? " Seeded with your unlocks (your own catalog is untouched)."
+            : " Started fresh - use 'inherit' next time to seed it from your unlocks.")), false);
         return Command.SINGLE_SUCCESS;
     }
 
@@ -272,6 +290,102 @@ public class JourneyModeCommand {
             return 0;
         }
         source.sendSuccess(Component.literal("Transferred team ownership to " + targetName + "."), false);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ---------------------------------------------------------------- item 3: /journeymode save
+
+    private static int saveInfo(CommandSourceStack source) {
+        String id = com.aryangpt007.journeymode.data.GlobalDataHandler.getCurrentSaveId();
+        String scope = com.aryangpt007.journeymode.data.SaveScopeConfig.describe();
+        boolean perSave = com.aryangpt007.journeymode.data.SaveScopeConfig.isPerSave();
+        source.sendSuccess(Component.literal("Journey Mode scope: " + scope), false);
+        source.sendSuccess(Component.literal("This save: " + (id == null ? "not identified yet" : id)), false);
+        if (!perSave) {
+            source.sendSuccess(Component.literal("\u00a77Catalogs are shared across every world in this installation."), false);
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int saveResetWarn(CommandSourceStack source) {
+        source.sendFailure(Component.literal("This wipes THIS world's catalog. The installation-wide archive is untouched. Re-run as: /journeymode save reset confirm"));
+        return 0;
+    }
+
+    private static int saveReset(CommandSourceStack source) {
+        if (!source.hasPermission(2)) {
+            source.sendFailure(Component.literal("That requires operator permission - it affects every player in this world."));
+            return 0;
+        }
+        boolean wiped = com.aryangpt007.journeymode.data.GlobalDataHandler.resetCurrentSave();
+        if (wiped) {
+            source.sendSuccess(Component.literal("This world's Journey Mode catalog has been wiped. Players must rejoin to see it."), true);
+        } else {
+            source.sendFailure(Component.literal("Nothing to reset - unlock_scope is not per_save, or this world has no catalog yet."));
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ---------------------------------------------------------------- purge (self-service)
+
+    /**
+     * Remove a single entry from the caller's own catalog.
+     *
+     * <p>Deliberately <b>not</b> op-gated. An entry whose owning mod throws while rendering it
+     * makes the whole menu unusable, and before this existed the only escape was
+     * /journeymode reset, which wipes every unlock the player has. Letting someone delete their
+     * own progress is not a permission concern; being unable to is a support burden.
+     *
+     * <p>Takes a raw greedy string rather than an item argument so a hybrid key (base_id|nbt)
+     * can be pasted exactly as the broken-entry tooltip prints it.
+     */
+    private static int purgeEntry(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        if (!(source.getEntity() instanceof ServerPlayer)) {
+            source.sendFailure(Component.literal("This command can only be used by players"));
+            return 0;
+        }
+        ServerPlayer player = (ServerPlayer) source.getEntity();
+
+        String key = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "key").trim();
+        if (key.isEmpty()) {
+            source.sendFailure(Component.literal("Give the entry key, e.g. /journeymode purge irons_spellbooks:scroll"));
+            return 0;
+        }
+
+        JourneyDataAttachment data = GlobalDataHandler.getPlayerData(player);
+        if (data == null) {
+            source.sendFailure(Component.literal("Failed to access Journey Mode data"));
+            return 0;
+        }
+
+        boolean removed = data.purge(key);
+
+        // A team's catalog is shared, so purging from it affects every member - only the owner
+        // may do that. Non-owners still get their personal entry cleared above.
+        java.util.Optional<com.aryangpt007.journeymode.data.TeamData> team =
+            com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(player.getUUID());
+        if (team.isPresent()) {
+            if (player.getUUID().equals(team.get().getOwnerUuid())) {
+                if (team.get().purge(key)) {
+                    removed = true;
+                    com.aryangpt007.journeymode.data.TeamDataHandler.saveAfterDeposit(source.getServer());
+                }
+            } else if (team.get().isUnlocked(key)) {
+                source.sendFailure(Component.literal("'" + key + "' belongs to your team's shared catalog - only the team owner can purge it."));
+                return 0;
+            }
+        }
+
+        GlobalDataHandler.savePlayerUnlocks(player, data);
+        GlobalDataHandler.syncToClient(player, data);
+
+        final String shown = key;
+        if (removed) {
+            source.sendSuccess(Component.literal("\u00a7aRemoved '" + shown + "' from your catalog."), false);
+        } else {
+            source.sendFailure(Component.literal("No catalog entry matched '" + key + "'."));
+        }
         return Command.SINGLE_SUCCESS;
     }
 

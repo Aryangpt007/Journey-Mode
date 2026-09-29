@@ -30,7 +30,6 @@ public class TeamData {
     private final Set<String> unlockedItems = new HashSet<>();
     private final Map<String, Long> unlockTimestamps = new HashMap<>();
 
-    private RecipeDepthCalculator recipeCalculator;
 
     public TeamData(String id, String displayName, UUID ownerUuid) {
         this.id = id;
@@ -46,13 +45,19 @@ public class TeamData {
     public Set<UUID> getMembers() { return members; }
 
     public void initializeCalculator(RecipeManager recipeManager, RegistryAccess registryAccess) {
-        if (this.recipeCalculator == null) {
-            this.recipeCalculator = new RecipeDepthCalculator(recipeManager, registryAccess);
-        }
+        // Delegates to the one shared calculator (see ThresholdTable). This used to build a
+        // per-instance calculator, so every player carried their own full copy of the recipe
+        // index and their own depth cache.
+        ThresholdTable.bind(recipeManager, registryAccess);
     }
 
     public int getThreshold(net.minecraft.world.item.Item item) {
-        return recipeCalculator != null ? recipeCalculator.calculateThreshold(item) : 1;
+        RecipeDepthCalculator calculator = ThresholdTable.get();
+        if (calculator != null) {
+            return calculator.calculateThreshold(item);
+        }
+        // Fallback if nothing has bound recipes yet (no world loaded)
+        return 1;
     }
 
     /** @return true if this deposit crossed the threshold and unlocked the item for the whole team. */
@@ -71,6 +76,32 @@ public class TeamData {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Remove an entry entirely from the shared catalog - unlock, timestamp and collected count.
+     * Owner-only at the call site (see /journeymode purge); this class does not enforce that.
+     *
+     * @return true if the key was present in any of the three maps
+     */
+    /**
+     * Seed an unlock while preserving its original timestamp.
+     *
+     * <p>grant() stamps System.currentTimeMillis(), which is right for a genuine new unlock but
+     * wrong for seeding: pushing 3,000 inherited items through it would give them all one identical
+     * timestamp, making the Journey grid's newest-first ordering and the Stats tab's "Latest:" line
+     * meaningless for that team.
+     */
+    public void grantAt(String key, long timestamp) {
+        unlockedItems.add(key);
+        unlockTimestamps.put(key, timestamp);
+    }
+
+    public boolean purge(String key) {
+        boolean had = unlockedItems.remove(key);
+        had |= unlockTimestamps.remove(key) != null;
+        had |= collectedCounts.remove(key) != null;
+        return had;
     }
 
     public boolean isUnlocked(String key) {

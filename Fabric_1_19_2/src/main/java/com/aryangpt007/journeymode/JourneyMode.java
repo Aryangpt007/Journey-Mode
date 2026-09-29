@@ -58,6 +58,23 @@ public class JourneyMode implements ModInitializer {
         // any previous world's cache - a singleplayer client that switches worlds must never see
         // a different world's teams.
         ServerLifecycleEvents.SERVER_STARTING.register(TeamDataHandler::load);
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> com.aryangpt007.journeymode.data.GlobalDataHandler.invalidateCachedRoot());
+        // Item 3: identify this world before anything reads a catalog, so per-save scope
+        // resolves against the right block from the very first query.
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTING.register(server ->
+            com.aryangpt007.journeymode.data.SaveIdStamp.begin(
+                server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile()));
+        // Item 5: bake every threshold once at recipe-load, not during play. Recipes are
+        // datapack-driven, so they only exist from server start onwards - a mod-load-time
+        // bake would find an empty RecipeManager.
+        ServerLifecycleEvents.SERVER_STARTING.register(server ->
+            com.aryangpt007.journeymode.data.ThresholdTable.rebuild(server.getRecipeManager(), server.registryAccess()));
+        // Debounced writes (see GlobalDataHandler.markDirty) must be forced out when a
+        // player leaves or the server stops, or the last deposits before quitting are lost.
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server ->
+            com.aryangpt007.journeymode.data.GlobalDataHandler.flush());
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+            com.aryangpt007.journeymode.data.GlobalDataHandler.flush());
 
         // Register server play connection events for loading and clearing player unlocks
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {

@@ -10,6 +10,7 @@ import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.item.Item;
+import com.aryangpt007.journeymode.client.SafeCatalogRender;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.TextComponentString;
@@ -302,6 +303,30 @@ public class JourneyModeScreen extends GuiContainer {
     }
 
     @javax.annotation.Nullable
+    /**
+     * Tooltip for one catalog entry. The stack handed to renderToolTip is reconstructed from a
+     * stored key, and a mod that considers it malformed can throw from inside its own tooltip
+     * code - which, unguarded, kills the client every time the cursor crosses this slot. On
+     * failure the entry is marked broken and a plain-text tooltip naming the key is drawn
+     * instead, so the player can read it and purge it.
+     */
+    private void renderEntryTooltip(String key, int mouseX, int mouseY) {
+        ItemStack stack = SafeCatalogRender.stackFor(key);
+        if (!stack.isEmpty()) {
+            try {
+                this.renderToolTip(stack, mouseX, mouseY);
+                return;
+            } catch (Throwable t) {
+                SafeCatalogRender.markBroken(key, "tooltip rendering", t);
+            }
+        }
+        List<String> lines = new ArrayList<>();
+        lines.add("\u00a7cUnreadable entry");
+        lines.add("\u00a77" + key);
+        lines.add("\u00a78/journeymode purge " + key);
+        this.drawHoveringText(lines, mouseX, mouseY);
+    }
+
     private String findLatestUnlockedName(IJourneyData data) {
         // Memoized in CatalogStatsCache against the sync generation - this runs on every
         // rendered frame the Stats tab is open, and the un-memoized version copied the whole
@@ -309,8 +334,8 @@ public class JourneyModeScreen extends GuiContainer {
         String latestKey = com.aryangpt007.journeymode.client.CatalogStatsCache.getMostRecentlyUnlockedKey(data);
         if (latestKey == null) return null;
 
-        ItemStack latestStack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(latestKey);
-        return latestStack.isEmpty() ? latestKey : latestStack.getDisplayName();
+        ItemStack latestStack = SafeCatalogRender.stackFor(latestKey);
+        return SafeCatalogRender.nameFor(latestKey, latestStack);
     }
 
     @Override
@@ -422,8 +447,7 @@ public class JourneyModeScreen extends GuiContainer {
         // Step 1: Draw all the slot backgrounds (flat 2D, unlit)
         for (int i = startIndex; i < endIndex; i++) {
             String key = unlockedItems.get(i);
-            ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
-            if (stack.isEmpty()) continue;
+            ItemStack stack = SafeCatalogRender.stackFor(key);
             
             int gridIndex = i - startIndex;
             int row = gridIndex / ITEMS_PER_ROW;
@@ -434,13 +458,18 @@ public class JourneyModeScreen extends GuiContainer {
 
             drawRect(itemX - 1, itemY - 1, itemX + 17, itemY + 17, 0xFF373737);
             drawRect(itemX, itemY, itemX + 16, itemY + 16, 0xFF8B8B8B);
+            // Unreadable entry: marker drawn in this flat/unlit pass rather than among
+            // the items, so item lighting can't tint it.
+            if (stack.isEmpty()) {
+                drawRect(itemX + 3, itemY + 3, itemX + 13, itemY + 13, 0xFFB02020);
+            }
         }
 
         // Step 2: Enable GUI standard item lighting and render all the items
         net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
         for (int i = startIndex; i < endIndex; i++) {
             String key = unlockedItems.get(i);
-            ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
+            ItemStack stack = SafeCatalogRender.stackFor(key);
             if (stack.isEmpty()) continue;
             
             int gridIndex = i - startIndex;
@@ -450,16 +479,19 @@ public class JourneyModeScreen extends GuiContainer {
             int itemX = x + 8 + col * 18;
             int itemY = y + 18 + row * 18;
             
-            this.itemRender.renderItemAndEffectIntoGUI(stack, itemX, itemY);
-            this.itemRender.renderItemOverlays(this.fontRenderer, stack, itemX, itemY);
+            try {
+                this.itemRender.renderItemAndEffectIntoGUI(stack, itemX, itemY);
+                this.itemRender.renderItemOverlays(this.fontRenderer, stack, itemX, itemY);
+            } catch (Throwable t) {
+                SafeCatalogRender.markBroken(key, "item rendering", t);
+            }
         }
         net.minecraft.client.renderer.RenderHelper.disableStandardItemLighting();
 
         // Step 3: Draw hover highlights (flat 2D, semi-transparent overlay)
         for (int i = startIndex; i < endIndex; i++) {
             String key = unlockedItems.get(i);
-            ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
-            if (stack.isEmpty()) continue;
+            ItemStack stack = SafeCatalogRender.stackFor(key);
             
             int gridIndex = i - startIndex;
             int row = gridIndex / ITEMS_PER_ROW;
@@ -493,18 +525,21 @@ public class JourneyModeScreen extends GuiContainer {
             return items;
         }
 
-        if (searchQuery.equals(cachedFilterQuery) && items.equals(cachedFilterSource)) {
+        // getUnlockedItemsSorted() now returns a stable cached instance that is only replaced
+        // when the catalog changes, so identity is both sufficient and O(1) here. The old
+        // equals() walked every key in the catalog on every rendered frame.
+        if (searchQuery.equals(cachedFilterQuery) && items == cachedFilterSource) {
             return cachedFilterResult;
         }
 
         List<String> filtered = new ArrayList<>();
         for (String key : items) {
-            ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
-            if (!stack.isEmpty()) {
-                String itemName = stack.getDisplayName().toLowerCase();
-                if (itemName.contains(searchQuery)) {
-                    filtered.add(key);
-                }
+            // Broken entries fall back to matching on their raw key, which is what makes
+            // them findable by search - and therefore purgeable - instead of invisible.
+            ItemStack stack = SafeCatalogRender.stackFor(key);
+            String itemName = SafeCatalogRender.nameFor(key, stack).toLowerCase();
+            if (itemName.contains(searchQuery)) {
+                filtered.add(key);
             }
         }
 
@@ -538,8 +573,7 @@ public class JourneyModeScreen extends GuiContainer {
                 int itemY = y + 18 + row * 18;
 
                 if (mouseX >= itemX && mouseX < itemX + 16 && mouseY >= itemY && mouseY < itemY + 16) {
-                    ItemStack stack = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(key);
-                    this.renderToolTip(stack, mouseX, mouseY);
+                    renderEntryTooltip(key, mouseX, mouseY);
                     break;
                 }
             }
@@ -674,7 +708,14 @@ public class JourneyModeScreen extends GuiContainer {
                     // 16, and mods declare their own limits. Ask the reconstructed stack instead
                     // of assuming - the server clamps to the same limit independently, since it
                     // cannot trust a count that arrived over the network.
-                    ItemStack requested = com.aryangpt007.journeymode.data.JourneyData.itemStackFromKey(itemId);
+                    ItemStack requested = SafeCatalogRender.stackFor(itemId);
+                    if (requested.isEmpty()) {
+                        // Broken entry - the server can't hand back anything meaningful, so don't
+                        // ask. Tell the player how to get rid of it instead.
+                        this.mc.player.sendMessage(new net.minecraft.util.text.TextComponentString(
+                            "\u00a7cThat entry can't be rebuilt. Remove it with \u00a7f/journeymode purge " + itemId));
+                        return;
+                    }
                     int count = isShiftKeyDown() ? Math.max(1, requested.getMaxStackSize()) : 1;
                     NetworkHandler.sendToServer(new RequestItemPacket(itemId, count));
                     return;

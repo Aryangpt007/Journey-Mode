@@ -12,6 +12,7 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent;
+import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
 
 /**
  * Event handlers for Journey Mode on Forge 1.12.2
@@ -50,5 +51,15 @@ public class JourneyModeEvents {
                 GlobalDataHandler.syncToClient(newPlayer, newData);
             }
         }
+    }
+
+    /**
+     * Writes are debounced (see GlobalDataHandler.markDirty), so an orderly shutdown or a
+     * player leaving must force whatever is still pending out to disk. Without this the
+     * last few deposits before quitting would sit unwritten.
+     */
+    @SubscribeEvent
+    public void onPlayerLoggedOut(PlayerLoggedOutEvent event) {
+        com.aryangpt007.journeymode.data.GlobalDataHandler.flush();
     }
 }

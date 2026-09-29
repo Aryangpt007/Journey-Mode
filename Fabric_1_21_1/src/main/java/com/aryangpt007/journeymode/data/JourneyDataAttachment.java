@@ -39,7 +39,6 @@ public class JourneyDataAttachment {
     private Set<String> pendingUnlockCelebration = Collections.emptySet();
 
     public static final int UNLOCK_THRESHOLD = 30; // Fallback value
-    private RecipeDepthCalculator recipeCalculator; // Lazily initialized
 
     public JourneyDataAttachment() {
         this.collectedCounts = new HashMap<>();
@@ -51,7 +50,12 @@ public class JourneyDataAttachment {
     /**
      * Serialize to JSON string
      */
-    public String toJsonString() {
+    /**
+     * Build the JSON form directly. GlobalDataHandler used to call toJsonString() and then
+     * immediately re-parse the result back into a JsonObject on every save - a pure
+     * serialize/parse round trip with no purpose, once per deposit.
+     */
+    public JsonObject toJsonObject() {
         JsonObject json = new JsonObject();
         
         JsonObject countsJson = new JsonObject();
@@ -72,7 +76,11 @@ public class JourneyDataAttachment {
             json.addProperty("team_id", teamId);
         }
 
-        return GSON.toJson(json);
+        return json;
+    }
+
+    public String toJsonString() {
+        return GSON.toJson(toJsonObject());
     }
 
     /**
@@ -122,15 +130,18 @@ public class JourneyDataAttachment {
     }
     
     public void initializeCalculator(RecipeManager recipeManager, RegistryAccess registryAccess) {
-        if (this.recipeCalculator == null) {
-            this.recipeCalculator = new RecipeDepthCalculator(recipeManager, registryAccess);
-        }
+        // Delegates to the one shared calculator (see ThresholdTable). This used to build a
+        // per-instance calculator, so every player carried their own full copy of the recipe
+        // index and their own depth cache.
+        ThresholdTable.bind(recipeManager, registryAccess);
     }
     
     public int getThreshold(Item item) {
-        if (recipeCalculator != null) {
-            return recipeCalculator.calculateThreshold(item);
+        RecipeDepthCalculator calculator = ThresholdTable.get();
+        if (calculator != null) {
+            return calculator.calculateThreshold(item);
         }
+        // Fallback if nothing has bound recipes yet (no world loaded)
         return item.getDefaultMaxStackSize() == 1 ? 1 : UNLOCK_THRESHOLD;
     }
 
@@ -143,24 +154,27 @@ public class JourneyDataAttachment {
     public static ItemStack getNormalizedStack(ItemStack original) {
         if (original.isEmpty()) return original;
         ItemStack normalized = new ItemStack(original.getItem());
-        if (original.has(DataComponents.POTION_CONTENTS)) {
-            normalized.set(DataComponents.POTION_CONTENTS, original.get(DataComponents.POTION_CONTENTS));
-        }
-        if (original.has(DataComponents.STORED_ENCHANTMENTS)) {
-            normalized.set(DataComponents.STORED_ENCHANTMENTS, original.get(DataComponents.STORED_ENCHANTMENTS));
-        }
-        if (original.has(DataComponents.INSTRUMENT)) {
-            normalized.set(DataComponents.INSTRUMENT, original.get(DataComponents.INSTRUMENT));
-        }
-        if (original.has(DataComponents.SUSPICIOUS_STEW_EFFECTS)) {
-            normalized.set(DataComponents.SUSPICIOUS_STEW_EFFECTS, original.get(DataComponents.SUSPICIOUS_STEW_EFFECTS));
+
+        // Deny-by-exception (see ComponentNormalizationRules). 1.8.1 copied four hardcoded vanilla
+        // components and dropped the rest, which is what discarded every modded identity.
+        // getComponentsPatch() is only what differs from the item's defaults, so a plain item
+        // produces an empty patch and therefore a bare key - no default-component bloat.
+        for (java.util.Map.Entry<net.minecraft.core.component.DataComponentType<?>, java.util.Optional<?>> entry
+                : original.getComponentsPatch().entrySet()) {
+            net.minecraft.core.component.DataComponentType<?> type = entry.getKey();
+            if (ComponentNormalizationRules.isStripped(type)) continue;
+            if (entry.getValue().isEmpty()) continue; // patch entry meaning "removed"
+            copyComponent(original, normalized, type);
         }
 
-        for (net.minecraft.core.component.DataComponentType<?> extra :
+        // Third-party rules may still contribute components, but can only ever ADD to what
+        // survives - they cannot resurrect a stripped one, since the loop above skips those.
+        for (net.minecraft.core.component.DataComponentType<?> type :
                 com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationComponents(original)) {
-            copyComponentIfPresent(original, normalized, extra);
+            if (!ComponentNormalizationRules.isStripped(type)) {
+                copyComponent(original, normalized, type);
+            }
         }
-
         return normalized;
     }
 
@@ -175,23 +189,53 @@ public class JourneyDataAttachment {
     /**
      * Helper to generate a structured key from an ItemStack, preserving subtype components.
      */
+    /** Generic helper so a wildcard-captured DataComponentType<?> can be copied type-safely. */
+    private static <T> void copyComponent(ItemStack from, ItemStack to, net.minecraft.core.component.DataComponentType<T> type) {
+        T value = from.get(type);
+        if (value != null) {
+            to.set(type, value);
+        }
+    }
+
     public static String getItemKey(ItemStack stack, RegistryAccess registryAccess) {
         ItemStack normalized = getNormalizedStack(stack);
         String baseId = BuiltInRegistries.ITEM.getKey(normalized.getItem()).toString();
-        if (!normalized.getComponentsPatch().isEmpty()) {
-            try {
-                Tag tag = normalized.save(registryAccess);
-                return baseId + "|" + tag.toString();
-            } catch (Exception e) {
-                // Fallback
-            }
+        // Any surviving component difference makes this a distinct catalog entry. Asking the patch
+        // is both cheaper and more honest than enumerating component types by hand, which is what
+        // let modded identities fall through the gap in 1.8.1.
+        if (normalized.getComponentsPatch().isEmpty()) {
+            return baseId;
         }
-        return baseId;
+        try {
+            Tag tag = normalized.save(registryAccess);
+            return baseId + "|" + ComponentKeys.canonical(tag);
+        } catch (Exception e) {
+            return baseId;
+        }
     }
 
     /**
      * Helper to reconstruct an ItemStack from a structured key.
      */
+    /**
+     * Rewrite a stored key into its current canonical spelling, for the schema 2 to 3 migration.
+     * Only the serialized-stack half is touched: re-parsed and re-emitted with sorted keys.
+     * A bare key stays bare, and an unparseable one is returned untouched rather than dropped -
+     * never lose an unlock to a parse error.
+     */
+    public static String canonicaliseKey(String key) {
+        if (key == null || key.isEmpty()) return key;
+        int delimiter = key.indexOf('|');
+        if (delimiter == -1) return key;
+        String itemId = key.substring(0, delimiter);
+        try {
+            CompoundTag parsed = TagParser.parseTag(key.substring(delimiter + 1));
+            return itemId + "|" + ComponentKeys.canonical(parsed);
+        } catch (Exception e) {
+            return key;
+        }
+    }
+
     public static ItemStack itemStackFromKey(String key, RegistryAccess registryAccess) {
         if (key == null || key.isEmpty()) return ItemStack.EMPTY;
         int delimiter = key.indexOf('|');
@@ -217,6 +261,7 @@ public class JourneyDataAttachment {
         int currentCount = collectedCounts.getOrDefault(key, 0);
         int newCount = currentCount + stack.getCount();
         collectedCounts.put(key, newCount);
+        catalogChanged();
 
         int threshold = getThreshold(stack.getItem());
         
@@ -234,6 +279,7 @@ public class JourneyDataAttachment {
     public void grant(String key) {
         unlockedItems.add(key);
         unlockTimestamps.put(key, System.currentTimeMillis());
+        catalogChanged();
     }
 
     /**
@@ -245,6 +291,23 @@ public class JourneyDataAttachment {
         unlockedItems.remove(key);
         unlockTimestamps.remove(key);
         collectedCounts.put(key, 0);
+        catalogChanged();
+    }
+
+    /**
+     * Remove an entry entirely - unlock, timestamp and collected count. Unlike revoke(), which
+     * zeroes the count so an op-revoked item can't instantly re-unlock, this erases the key
+     * outright so it stops appearing anywhere: the catalog grid, the stats totals and the sync
+     * payload. Used by /journeymode purge to get rid of an entry the client cannot render.
+     *
+     * @return true if the key was present in any of the three maps
+     */
+    public boolean purge(String key) {
+        boolean had = unlockedItems.remove(key);
+        had |= unlockTimestamps.remove(key) != null;
+        had |= collectedCounts.remove(key) != null;
+        if (had) catalogChanged();
+        return had;
     }
 
     /**
@@ -266,6 +329,7 @@ public class JourneyDataAttachment {
                 unlockTimestamps.put(key, System.currentTimeMillis());
             }
         }
+        catalogChanged();
     }
 
     public boolean isUnlocked(Item item) {
@@ -337,14 +401,39 @@ public class JourneyDataAttachment {
         return new HashSet<>(unlockedItems);
     }
     
-    public List<String> getUnlockedItemsSorted() {
-        List<String> sortedItems = new ArrayList<>(unlockedItems);
-        sortedItems.sort((a, b) -> {
-            long timeA = unlockTimestamps.getOrDefault(a, 0L);
-            long timeB = unlockTimestamps.getOrDefault(b, 0L);
-            return Long.compare(timeB, timeA);
+    // The sorted view is rebuilt only when the catalog actually changes. It used to allocate a
+    // fresh list of every unlocked key and run an O(n log n) sort - with two map lookups per
+    // comparison - on every call, and the Journey tab reaches this twice per rendered frame
+    // (item grid + tooltip pass). That is the same per-frame-recompute shape that caused the
+    // 1.8.0 deposit-screen freeze, just in a different method.
+    private java.util.List<String> sortedCache = null;
+    private int sortedCacheGeneration = -1;
+
+    public java.util.List<String> getUnlockedItemsSorted() {
+        if (sortedCache != null && sortedCacheGeneration == syncGeneration) {
+            return sortedCache;
+        }
+        java.util.List<String> sortedItems = new java.util.ArrayList<String>(unlockedItems);
+        java.util.Collections.sort(sortedItems, new java.util.Comparator<String>() {
+            @Override
+            public int compare(String a, String b) {
+                long timeA = unlockTimestamps.containsKey(a) ? unlockTimestamps.get(a) : 0L;
+                long timeB = unlockTimestamps.containsKey(b) ? unlockTimestamps.get(b) : 0L;
+                return Long.compare(timeB, timeA); // Most recent first
+            }
         });
-        return sortedItems;
+        sortedCache = java.util.Collections.unmodifiableList(sortedItems);
+        sortedCacheGeneration = syncGeneration;
+        return sortedCache;
+    }
+
+    /**
+     * Invalidates every generation-keyed cache (the sorted catalog view above, the client's
+     * per-namespace stats breakdown). Anything that mutates the three catalog maps must call
+     * this, or a cached view will outlive the data it was built from.
+     */
+    private void catalogChanged() {
+        syncGeneration++;
     }
     
     public Map<String, Long> getUnlockTimestamps() {
@@ -421,6 +510,40 @@ public class JourneyDataAttachment {
         this.teamDisplayName = (teamDisplayName == null || teamDisplayName.isEmpty()) ? null : teamDisplayName;
     }
 
+    /**
+     * Merge a partial sync into the existing catalog instead of replacing it.
+     *
+     * <p>A deposit changes exactly one entry, but the full-sync path re-sends the whole catalog to
+     * communicate that - thousands of keys to say one counter moved by one. A delta carries only
+     * what changed.
+     *
+     * <p>Removals are deliberately <b>not</b> expressible here. purge / revoke / reset / team
+     * join-leave all stay on the full-sync path, which keeps the merge unambiguous: a key absent
+     * from a delta means "unchanged", never "deleted". Getting that wrong would silently drop
+     * unlocks, so the ambiguity is removed by construction rather than by convention.
+     */
+    public void applyDelta(Map<String, Integer> counts, Set<String> unlocked, Map<String, Long> timestamps,
+                           boolean enabled, boolean showTooltips, String teamDisplayName) {
+        if (hasSyncedOnce) {
+            Set<String> newKeys = new HashSet<String>(unlocked);
+            newKeys.removeAll(this.unlockedItems);
+            this.pendingUnlockCelebration = newKeys;
+        } else {
+            // A delta arriving before any full sync would leave the catalog incomplete. Treat it
+            // as the first sync for celebration purposes; the login full-sync fills in the rest.
+            this.pendingUnlockCelebration = Collections.emptySet();
+            this.hasSyncedOnce = true;
+        }
+
+        this.collectedCounts.putAll(counts);
+        this.unlockedItems.addAll(unlocked);
+        this.unlockTimestamps.putAll(timestamps);
+        this.enabled = enabled;
+        this.showTooltips = showTooltips;
+        this.teamDisplayName = (teamDisplayName == null || teamDisplayName.isEmpty()) ? null : teamDisplayName;
+        this.syncGeneration++;
+    }
+
     /** Client-side only: the team's display name for the badge, or null if not on a team. */
     public String getTeamDisplayName() {
         return teamDisplayName;
@@ -468,6 +591,7 @@ public class JourneyDataAttachment {
         this.unlockedItems.addAll(other.unlockedItems);
         this.unlockTimestamps.clear();
         this.unlockTimestamps.putAll(other.unlockTimestamps);
+        catalogChanged();
         this.enabled = other.enabled;
         this.showTooltips = other.showTooltips;
         this.teamId = other.teamId;
@@ -477,5 +601,6 @@ public class JourneyDataAttachment {
         this.collectedCounts.clear();
         this.unlockedItems.clear();
         this.unlockTimestamps.clear();
+        catalogChanged();
     }
 }

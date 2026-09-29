@@ -179,7 +179,11 @@ public class JourneyModeMenu extends AbstractContainerMenu {
             }
 
             if (player instanceof ServerPlayer serverPlayer) {
-                GlobalDataHandler.syncToClient(serverPlayer, journeyData);
+                // Delta rather than a whole-catalog resend: this path fires on every single
+                // deposit. Deposit-All below deliberately keeps the full sync, since it changes
+                // many keys at once and a delta would approach the same size anyway.
+                GlobalDataHandler.syncDeltaToClient(serverPlayer, journeyData,
+                    java.util.Collections.singleton(JourneyDataAttachment.getItemKey(stack, player.level().registryAccess())));
                 GlobalDataHandler.savePlayerUnlocks(serverPlayer, journeyData);
                 if (team != null) {
                     com.aryangpt007.journeymode.data.TeamDataHandler.saveAfterDeposit(serverPlayer.getServer());

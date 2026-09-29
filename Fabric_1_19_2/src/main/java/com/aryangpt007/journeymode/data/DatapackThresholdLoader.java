@@ -75,6 +75,13 @@ public class DatapackThresholdLoader implements IdentifiableResourceReloadListen
         loadedThresholds = loaded;
         LOGGER.info("Loaded {} datapack-provided threshold overrides", loaded.size());
         ConfigHandler.onDatapackThresholdsReloaded();
+        // A /reload rewrites recipes in place on the SAME RecipeManager instance, so
+        // ThresholdTable's identity check cannot see the change. This listener already runs at
+        // exactly the right moment (datapack apply), so it is where the shared calculator gets
+        // dropped. Without this the baked depths would outlive the recipes they came from - and
+        // because the calculator is now shared rather than per-player, that staleness would be
+        // worse than the pre-1.8.2 behaviour, not better.
+        com.aryangpt007.journeymode.data.ThresholdTable.invalidate();
     }
 
     public static Map<String, Integer> getDatapackThresholds() {

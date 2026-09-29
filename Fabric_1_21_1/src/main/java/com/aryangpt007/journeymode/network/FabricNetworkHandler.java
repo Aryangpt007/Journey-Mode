@@ -185,6 +185,19 @@ public class FabricNetworkHandler {
      * (deposit/fetch/delete have their own team checks - see JourneyModeMenu / RequestItemPacket
      * handling below).
      */
+    /**
+     * Partial sync: only the entries the caller says changed, merged client-side rather than
+     * replacing the catalog. Unlike the full sync below there is no payload-shedding guard here,
+     * because a delta is bounded by how many keys one action touched - it cannot approach
+     * vanilla's 1 MiB custom-payload ceiling the way a whole-catalog resend can.
+     */
+    public static void syncDeltaToPlayer(ServerPlayer player, java.util.Map<String, Integer> counts,
+                                         java.util.Set<String> unlocked, java.util.Map<String, Long> timestamps,
+                                         boolean enabled, boolean showTooltips, String teamDisplayName) {
+        ServerPlayNetworking.send(player, new SyncJourneyDataPacket(
+            counts, unlocked, timestamps, enabled, showTooltips, teamDisplayName, true));
+    }
+
     public static void syncToPlayer(ServerPlayer player, JourneyDataAttachment data) {
         java.util.Optional<com.aryangpt007.journeymode.data.TeamData> team = data.getTeamId() != null
             ? com.aryangpt007.journeymode.data.TeamDataHandler.getTeamForPlayer(player.getUUID())
