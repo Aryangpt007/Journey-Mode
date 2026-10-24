@@ -46,6 +46,9 @@ public record ConfigSyncPacket(ConfigHandler.SyncSnapshot snapshot) implements C
             ByteBufCodecs.VAR_INT.encode(buf, s.defaultOverride());
         }
         ByteBufCodecs.VAR_INT.encode(buf, s.maxThresholdCap());
+        // Pack-maker normalization rules (see NormalizationConfig): the client keys items
+        // itself for tooltips and the deposit tab, so it must strip exactly what the server strips.
+        ByteBufCodecs.stringUtf8(262144).encode(buf, com.aryangpt007.journeymode.data.NormalizationConfig.syncText());
     }
 
     private static ConfigSyncPacket decode(ByteBuf buf) {
@@ -57,6 +60,7 @@ public record ConfigSyncPacket(ConfigHandler.SyncSnapshot snapshot) implements C
         Map<String, Integer> patternThresholds = STRING_INT_MAP.decode(buf);
         Integer defaultOverride = ByteBufCodecs.BOOL.decode(buf) ? ByteBufCodecs.VAR_INT.decode(buf) : null;
         int maxThresholdCap = ByteBufCodecs.VAR_INT.decode(buf);
+        com.aryangpt007.journeymode.data.NormalizationConfig.applySynced(ByteBufCodecs.stringUtf8(262144).decode(buf));
 
         return new ConfigSyncPacket(new ConfigHandler.SyncSnapshot(
             exactBlacklist, tagBlacklist, patternBlacklist,

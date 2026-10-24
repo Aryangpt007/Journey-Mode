@@ -66,7 +66,7 @@ public class TeamDataHandler {
             if (root.has("teams")) {
                 JsonObject teamsJson = root.getAsJsonObject("teams");
                 for (String teamId : teamsJson.keySet()) {
-                    TeamData team = TeamData.fromJson(teamId, teamsJson.getAsJsonObject(teamId));
+                    TeamData team = TeamData.fromJson(teamId, GlobalDataHandler.rekeyCatalog(teamsJson.getAsJsonObject(teamId)));
                     teams.put(teamId, team);
                     for (UUID member : team.getMembers()) {
                         playerTeam.put(member, teamId);

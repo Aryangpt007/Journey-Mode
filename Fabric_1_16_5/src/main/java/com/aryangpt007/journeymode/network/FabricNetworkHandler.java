@@ -248,6 +248,9 @@ public class FabricNetworkHandler {
             buf.writeVarInt(defaultOverride);
         }
         buf.writeVarInt(snapshot.getMaxThresholdCap());
+        // Pack-maker normalization rules (see NormalizationConfig): the client keys items
+        // itself for tooltips and the deposit tab, so it must strip exactly what the server strips.
+        buf.writeUtf(com.aryangpt007.journeymode.data.NormalizationConfig.syncText(), 262144);
     }
 
     private static ConfigHandler.SyncSnapshot decodeConfigSync(FriendlyByteBuf buf) {
@@ -266,6 +269,7 @@ public class FabricNetworkHandler {
 
         Integer defaultOverride = buf.readBoolean() ? Integer.valueOf(buf.readVarInt()) : null;
         int maxThresholdCap = buf.readVarInt();
+        com.aryangpt007.journeymode.data.NormalizationConfig.applySynced(buf.readUtf(262144));
 
         return new ConfigHandler.SyncSnapshot(
             exactBlacklist, tagBlacklist, patternBlacklist,

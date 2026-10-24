@@ -26,6 +26,7 @@ Fabric_1_19_2|Fabric|journeymode-fabric-1.8.2-1.19.2.jar
 Fabric_1_20_1|Fabric 1.20.1|journeymode-fabric-1.8.2-1.20.1.jar
 Fabric_1_21_1|Fabric 1.21.1|journeymode-fabric-1.8.2-1.21.1.jar
 NeoForge_1_21_1|Neo 1.21.1|journeymode-1.8.2-1.21.1.jar
+NeoForge_26_1_2|Neo Forge 26.1.2|journeymode-1.8.2-26.1.2.jar
 "
 
 fail=0

@@ -206,14 +206,15 @@ public class JourneyData implements IJourneyData {
             // Deny-by-exception (see NormalizationRules). 1.8.1 did the opposite - an allowlist of
             // a handful of vanilla keys - which silently discarded every modded NBT identity and is
             // what broke Apotheosis gems, TACZ guns, Iron's Spells scrolls and GregTech hammers.
-            NBTTagCompound cleaned = NormalizationRules.strip(original.getTagCompound());
+            String itemNamespace = NormalizationRules.namespaceOf(original.getItem().getRegistryName().toString());
+            NBTTagCompound cleaned = NormalizationRules.strip(original.getTagCompound(), itemNamespace);
 
             // Third-party rules may contribute keys, but every one is re-checked against the
             // strip rules first. JourneyModeAPI.DENYLISTED_KEYS is only four entries and does
             // NOT cover ForgeCaps, backpacks, tanks and the rest of the container gate - taking
             // the API at its word here would reopen the duplication hole outright.
             for (String key : com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationKeys(original.getTagCompound())) {
-                if (NormalizationRules.isStripped(key, key)) continue;
+                if (NormalizationRules.isStripped(key, key, itemNamespace)) continue;
                 if (original.getTagCompound().hasKey(key)
                         && !cleaned.hasKey(key)) {
                     cleaned.setTag(key, original.getTagCompound().getTag(key).copy());
@@ -273,7 +274,7 @@ public class JourneyData implements IJourneyData {
         String nbt = key.substring(delimiter + 1);
         try {
             NBTTagCompound parsed = net.minecraft.nbt.JsonToNBT.getTagFromJson(nbt);
-            NBTTagCompound cleaned = NormalizationRules.strip(parsed);
+            NBTTagCompound cleaned = NormalizationRules.strip(parsed, NormalizationRules.namespaceOf(itemId));
             if (cleaned.getKeySet().isEmpty()) return itemId;
             return itemId + "|" + NormalizationRules.canonical(cleaned);
         } catch (Exception e) {

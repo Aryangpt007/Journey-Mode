@@ -1,0 +1,88 @@
+package com.aryangpt007.journeymode.client;
+
+import com.aryangpt007.journeymode.JourneyMode;
+import com.aryangpt007.journeymode.client.gui.JourneyModeScreen;
+import com.aryangpt007.journeymode.network.packets.OpenJourneyMenuPacket;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import org.lwjgl.glfw.GLFW;
+
+public class ClientSetup {
+    
+    // Define the keybind (configurable in Minecraft settings)
+    // Key categories are registered objects rather than bare translation keys since 1.21.9.
+    // The label resolves to "key.category.journeymode.main" (see en_us.json).
+    public static final KeyMapping.Category KEY_CATEGORY = new KeyMapping.Category(
+        net.minecraft.resources.Identifier.fromNamespaceAndPath(JourneyMode.MODID, "main"));
+
+    public static final KeyMapping OPEN_JOURNEY_MODE_KEY = new KeyMapping(
+        "key.journeymode.open_menu",                    // Translation key
+        InputConstants.Type.KEYSYM,                     // Input type
+        GLFW.GLFW_KEY_J,                                // Default key (J)
+        KEY_CATEGORY                                    // Category
+    );
+    
+    public static void onClientSetup(FMLClientSetupEvent event) {
+        JourneyMode.LOGGER.info("Journey Mode client setup");
+
+        // Register client-side key handler
+        NeoForge.EVENT_BUS.register(ClientKeyHandler.class);
+
+        // Register progress tooltip handler (§9)
+        NeoForge.EVENT_BUS.register(TooltipHandler.class);
+    }
+    
+    public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
+        event.registerCategory(KEY_CATEGORY);
+        event.register(OPEN_JOURNEY_MODE_KEY);
+    }
+
+    public static void registerScreens(RegisterMenuScreensEvent event) {
+        event.register(JourneyMode.JOURNEY_MODE_MENU.get(), JourneyModeScreen::new);
+    }
+
+    /**
+     * Client-side key handler nested inside client setup class to avoid server-side class loading issues
+     */
+    public static class ClientKeyHandler {
+        @SubscribeEvent
+        public static void onClientTick(ClientTickEvent.Post event) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null) return;
+
+            // Use the configurable keybind instead of hardcoded key
+            if (OPEN_JOURNEY_MODE_KEY.consumeClick()) {
+                // Key was just pressed
+                net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(new OpenJourneyMenuPacket());
+            }
+        }
+    }
+
+    /**
+     * §11 Visual Polish: action-bar message on threshold crossing, driven purely
+     * by client-side diffing (see JourneyDataAttachment.updateFromSync) - no dedicated
+     * "newly_unlocked" packet field needed. A full graphical toast (with custom textures) is
+     * deliberately out of scope for this pass - there's no art-asset pipeline in play here, so
+     * this uses the same action-bar message style the rest of the mod already uses.
+     */
+    public static void celebrateNewUnlocks(java.util.Set<String> newlyUnlocked) {
+        Minecraft mc = Minecraft.getInstance();
+        if (newlyUnlocked.isEmpty() || mc.player == null) return;
+
+        if (newlyUnlocked.size() == 1) {
+            String key = newlyUnlocked.iterator().next();
+            net.minecraft.world.item.ItemStack stack = com.aryangpt007.journeymode.data.JourneyDataAttachment.itemStackFromKey(key, mc.level.registryAccess());
+            String name = stack.isEmpty() ? key : stack.getHoverName().getString();
+            com.aryangpt007.journeymode.JourneyMode.message(mc.player, net.minecraft.network.chat.Component.literal("§6Unlocked: " + name + "!"), true);
+        } else {
+            com.aryangpt007.journeymode.JourneyMode.message(mc.player, net.minecraft.network.chat.Component.literal("§6Unlocked " + newlyUnlocked.size() + " items!"), true);
+        }
+    }
+}

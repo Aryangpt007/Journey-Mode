@@ -154,6 +154,7 @@ public class JourneyDataAttachment {
     public static ItemStack getNormalizedStack(ItemStack original) {
         if (original.isEmpty()) return original;
         ItemStack normalized = new ItemStack(original.getItem());
+        String itemNamespace = BuiltInRegistries.ITEM.getKey(original.getItem()).getNamespace();
 
         // Deny-by-exception (see ComponentNormalizationRules). 1.8.1 copied four hardcoded vanilla
         // components and dropped the rest, which is what discarded every modded identity.
@@ -162,8 +163,19 @@ public class JourneyDataAttachment {
         for (java.util.Map.Entry<net.minecraft.core.component.DataComponentType<?>, java.util.Optional<?>> entry
                 : original.getComponentsPatch().entrySet()) {
             net.minecraft.core.component.DataComponentType<?> type = entry.getKey();
-            if (ComponentNormalizationRules.isStripped(type)) continue;
+            if (ComponentNormalizationRules.isStripped(type, itemNamespace)) continue;
             if (entry.getValue().isEmpty()) continue; // patch entry meaning "removed"
+            if (type == net.minecraft.core.component.DataComponents.CUSTOM_DATA) {
+                // Plain NBT a mod keeps in custom_data gets the NBT-era key rules.
+                net.minecraft.world.item.component.CustomData data = original.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+                if (data != null) {
+                    CompoundTag cleaned = ComponentNormalizationRules.stripCustomData(data.copyTag(), itemNamespace);
+                    if (!cleaned.isEmpty()) {
+                        normalized.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(cleaned));
+                    }
+                }
+                continue;
+            }
             copyComponent(original, normalized, type);
         }
 
@@ -171,7 +183,7 @@ public class JourneyDataAttachment {
         // survives - they cannot resurrect a stripped one, since the loop above skips those.
         for (net.minecraft.core.component.DataComponentType<?> type :
                 com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationComponents(original)) {
-            if (!ComponentNormalizationRules.isStripped(type)) {
+            if (!ComponentNormalizationRules.isStripped(type, itemNamespace) && type != net.minecraft.core.component.DataComponents.CUSTOM_DATA) {
                 copyComponent(original, normalized, type);
             }
         }
@@ -230,6 +242,11 @@ public class JourneyDataAttachment {
         String itemId = key.substring(0, delimiter);
         try {
             CompoundTag parsed = TagParser.parseTag(key.substring(delimiter + 1));
+            // Re-run the current strip rules over the stored stack, so an entry written under
+            // older rules lines up with what a fresh deposit of the same item produces now.
+            int colon = itemId.indexOf(':');
+            String itemNamespace = colon > 0 ? itemId.substring(0, colon) : "minecraft";
+            if (!ComponentNormalizationRules.stripStoredComponents(parsed, itemNamespace)) return itemId;
             return itemId + "|" + ComponentKeys.canonical(parsed);
         } catch (Exception e) {
             return key;

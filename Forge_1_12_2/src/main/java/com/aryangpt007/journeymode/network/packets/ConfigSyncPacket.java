@@ -58,6 +58,9 @@ public class ConfigSyncPacket implements IMessage {
             packetBuffer.writeVarInt(defaultOverride);
         }
         packetBuffer.writeVarInt(snapshot.getMaxThresholdCap());
+        // Pack-maker normalization rules (see NormalizationConfig): the client keys items
+        // itself for tooltips and the deposit tab, so it must strip exactly what the server strips.
+        packetBuffer.writeString(com.aryangpt007.journeymode.data.NormalizationConfig.syncText());
     }
 
     @Override
@@ -79,6 +82,7 @@ public class ConfigSyncPacket implements IMessage {
 
             Integer defaultOverride = packetBuffer.readBoolean() ? packetBuffer.readVarInt() : null;
             int maxThresholdCap = packetBuffer.readVarInt();
+            com.aryangpt007.journeymode.data.NormalizationConfig.applySynced(packetBuffer.readString(32767));
 
             this.snapshot = new ConfigHandler.SyncSnapshot(
                 exactBlacklist, tagBlacklist, patternBlacklist,

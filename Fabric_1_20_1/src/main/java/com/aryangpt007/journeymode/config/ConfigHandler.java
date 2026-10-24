@@ -104,6 +104,8 @@ public class ConfigHandler {
 
     /** Called by /journeymode reloadconfig and by config-file writers after a mutation. */
     public static synchronized void reloadAll() {
+        // Strip rules for item normalization live in their own file (see NormalizationConfig).
+        com.aryangpt007.journeymode.data.NormalizationConfig.load();
         Rules loaded = new Rules();
         loadBlacklistInto(loaded);
         loadThresholdsInto(loaded);

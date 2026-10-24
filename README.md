@@ -156,6 +156,23 @@ Config files generate automatically under `config/Journey Mode/` and **hot-reloa
 *   Other mods can register their own `ThresholdProvider`/`NormalizationRule` via a small, dependency-free developer API.
 *   All config changes **push live to connected clients** — no restart, no reconnect.
 
+**`normalization.json` (1.8.2+)** — what Journey Mode strips from an item before it goes into your catalog. Duplicated items keep their modded identity (a gun stays that gun, a gem keeps its affix), but **contents, stored energy and storage links never come back**: a filled backpack, storage cell, Mekanism tank or Draconium Chest always withdraws empty. The file ships with defaults for popular mods (Mekanism, AE2, Create, Draconic Evolution, Sophisticated Backpacks, Ender IO, Apotheosis, TACZ, Refined Storage and more). Pack makers can add their own:
+
+```
+{
+  "strip_keys": [ "SomeModInventory" ],
+  "strip_components": [ "somemod:stored_items" ],
+  "mods": { "somemod": { "strip_keys": [ "Id" ] } },
+  "keep_keys": [ "a_default_you_disagree_with" ]
+}
+```
+
+*   `strip_keys` — NBT keys, any depth, any capitalisation. `strip_keys_containing` matches part of a name.
+*   `strip_components` — data component ids on 1.20.5+ (`mod:*` for a whole mod).
+*   `mods` — the same lists, applied only to that mod's items.
+*   `keep_keys` / `keep_components` — opt out of a default; it stays out after updates.
+*   The file can only **add** stripping — the built-in protection (durability, shulker boxes, bundles…) always applies. Existing catalog entries re-sort to the new rules automatically on the next world load.
+
 ***
 
 ## 📖 Commands & Controls

@@ -94,18 +94,26 @@ public final class NormalizationRules {
      * caller's stack must be left exactly as it was.
      */
     public static CompoundTag strip(CompoundTag original) {
-        return stripInto(original, "");
+        return strip(original, null);
     }
 
-    private static CompoundTag stripInto(CompoundTag source, String prefix) {
+    /**
+     * @param itemNamespace namespace of the item the tag belongs to, so per-mod rules in
+     *        normalization.json apply (see NormalizationConfig); null applies global rules only.
+     */
+    public static CompoundTag strip(CompoundTag original, String itemNamespace) {
+        return stripInto(original, "", itemNamespace);
+    }
+
+    private static CompoundTag stripInto(CompoundTag source, String prefix, String itemNamespace) {
         CompoundTag out = new CompoundTag();
         for (String key : source.getAllKeys()) {
             String path = prefix.isEmpty() ? key : prefix + "." + key;
-            if (isStripped(key, path)) continue;
+            if (isStripped(key, path, itemNamespace)) continue;
 
             Tag value = source.get(key);
             if (value instanceof CompoundTag) {
-                CompoundTag cleaned = stripInto((CompoundTag) value, path);
+                CompoundTag cleaned = stripInto((CompoundTag) value, path, itemNamespace);
                 // An emptied-out compound carries no identity; dropping it keeps keys shorter and
                 // stops "{}" fragments making two otherwise-identical items look different.
                 if (!cleaned.isEmpty()) out.put(key, cleaned);
@@ -124,6 +132,11 @@ public final class NormalizationRules {
      * to close.
      */
     public static boolean isStripped(String key, String path) {
+        return isStripped(key, path, null);
+    }
+
+    /** Built-in floor first, then the pack's normalization.json (which can only add). */
+    public static boolean isStripped(String key, String path, String itemNamespace) {
         if (CONTAINER_PATHS.contains(key) || CONTAINER_PATHS.contains(path)) return true;
         if (WEAR_KEYS.contains(key)) return true;
         if (WEAR_PATHS.contains(path)) return true;
@@ -133,7 +146,14 @@ public final class NormalizationRules {
         // missed one only costs a fragmented catalog, never a dupe.
         String lower = key.toLowerCase(Locale.ROOT);
         if (lower.endsWith("energy") || lower.endsWith("durability") || lower.endsWith("mana")) return true;
-        return false;
+        return NormalizationConfig.isKeyStripped(itemNamespace, key);
+    }
+
+    /** Namespace part of an item id ("minecraft:stone" -> "minecraft"); "minecraft" if none. */
+    public static String namespaceOf(String itemId) {
+        if (itemId == null) return "minecraft";
+        int colon = itemId.indexOf(':');
+        return colon > 0 ? itemId.substring(0, colon) : "minecraft";
     }
 
     /**

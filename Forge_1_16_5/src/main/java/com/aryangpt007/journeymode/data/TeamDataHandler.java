@@ -73,7 +73,7 @@ public class TeamDataHandler {
                 JsonObject teamsJson = root.getAsJsonObject("teams");
                 for (java.util.Map.Entry<String, com.google.gson.JsonElement> entry : teamsJson.entrySet()) {
                     String teamId = entry.getKey();
-                    TeamData team = TeamData.fromJson(teamId, entry.getValue().getAsJsonObject());
+                    TeamData team = TeamData.fromJson(teamId, GlobalDataHandler.rekeyCatalog(entry.getValue().getAsJsonObject()));
                     teams.put(teamId, team);
                     for (UUID member : team.getMembers()) {
                         playerTeam.put(member, teamId);

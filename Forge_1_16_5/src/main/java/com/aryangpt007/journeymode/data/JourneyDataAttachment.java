@@ -187,14 +187,15 @@ public class JourneyDataAttachment {
             // Deny-by-exception (see NormalizationRules). 1.8.1 did the opposite - an allowlist of
             // a handful of vanilla keys - which silently discarded every modded NBT identity and is
             // what broke Apotheosis gems, TACZ guns, Iron's Spells scrolls and GregTech hammers.
-            CompoundNBT cleaned = NormalizationRules.strip(original.getTag());
+            String itemNamespace = NormalizationRules.namespaceOf(Registry.ITEM.getKey(original.getItem()).toString());
+            CompoundNBT cleaned = NormalizationRules.strip(original.getTag(), itemNamespace);
 
             // Third-party rules may contribute keys, but every one is re-checked against the
             // strip rules first. JourneyModeAPI.DENYLISTED_KEYS is only four entries and does
             // NOT cover ForgeCaps, backpacks, tanks and the rest of the container gate - taking
             // the API at its word here would reopen the duplication hole outright.
             for (String key : com.aryangpt007.journeymode.api.JourneyModeAPI.collectAdditionalNormalizationKeys(original.getTag())) {
-                if (NormalizationRules.isStripped(key, key)) continue;
+                if (NormalizationRules.isStripped(key, key, itemNamespace)) continue;
                 if (original.getTag().contains(key)
                         && !cleaned.contains(key)) {
                     cleaned.put(key, original.getTag().get(key).copy());
@@ -247,7 +248,7 @@ public class JourneyDataAttachment {
         String nbt = key.substring(delimiter + 1);
         try {
             CompoundNBT parsed = net.minecraft.nbt.JsonToNBT.parseTag(nbt);
-            CompoundNBT cleaned = NormalizationRules.strip(parsed);
+            CompoundNBT cleaned = NormalizationRules.strip(parsed, NormalizationRules.namespaceOf(itemId));
             if (cleaned.isEmpty()) return itemId;
             return itemId + "|" + NormalizationRules.canonical(cleaned);
         } catch (Exception e) {

@@ -133,7 +133,7 @@ public class GlobalDataHandler {
             return freshRoot();
         }
 
-        return migrateIfNeeded(root);
+        return rekeyAllCatalogs(migrateIfNeeded(root));
     }
 
     private static JsonObject freshRoot() {
@@ -219,6 +219,54 @@ public class GlobalDataHandler {
         LOGGER.info("Migrated {} to schema_version 3: {} player(s), {} key(s) re-canonicalised, {} merged. No entries dropped.",
             FILE_NAME, playersTouched, keysRewritten, keysMerged);
         return root;
+    }
+
+    /**
+     * Re-apply the current normalization rules to every stored catalog key, merging any keys that
+     * now collapse together. Runs on every load because the rules can change between loads - an
+     * edit to normalization.json, or a mod update that adds built-in rules - and an entry stored
+     * under the old rules would otherwise sit beside a fresh deposit of the same item as a second
+     * catalog entry. Uses the same merge as the schema 3 migration, so nothing is ever dropped,
+     * and it is a no-op when nothing changed.
+     */
+    private static JsonObject rekeyAllCatalogs(JsonObject root) {
+        java.util.List<JsonObject> catalogs = new java.util.ArrayList<JsonObject>();
+        collectPlayerCatalogs(root.get(KEY_PLAYERS), catalogs);
+        JsonElement saves = root.get(KEY_SAVES);
+        if (saves != null && saves.isJsonObject()) {
+            for (Map.Entry<String, JsonElement> save : saves.getAsJsonObject().entrySet()) {
+                if (save.getValue().isJsonObject()) {
+                    collectPlayerCatalogs(save.getValue().getAsJsonObject().get(KEY_PLAYERS), catalogs);
+                }
+            }
+        }
+        int rewritten = 0;
+        int merged = 0;
+        for (JsonObject catalog : catalogs) {
+            int[] stats = recanonicaliseCatalog(catalog);
+            rewritten += stats[0];
+            merged += stats[1];
+        }
+        if (rewritten > 0) {
+            LOGGER.info("Re-keyed {} catalog entr{} under the current normalization rules ({} merged). No entries dropped.",
+                rewritten, rewritten == 1 ? "y" : "ies", merged);
+            // Persist on the next flush. Not markDirty(): the root is not cached yet at this point.
+            dirty = true;
+        }
+        return root;
+    }
+
+    private static void collectPlayerCatalogs(JsonElement players, java.util.List<JsonObject> out) {
+        if (players == null || !players.isJsonObject()) return;
+        for (Map.Entry<String, JsonElement> player : players.getAsJsonObject().entrySet()) {
+            if (player.getValue().isJsonObject()) out.add(player.getValue().getAsJsonObject());
+        }
+    }
+
+    /** Same re-key for a team's shared catalog (see TeamDataHandler.load). */
+    static JsonObject rekeyCatalog(JsonObject catalog) {
+        recanonicaliseCatalog(catalog);
+        return catalog;
     }
 
     /** @return two counters: {rewritten, merged} */
