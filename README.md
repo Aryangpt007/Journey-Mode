@@ -276,7 +276,7 @@ A new config file decides what gets stripped. It ships with defaults for popular
 
 #### 🌍 New: Minecraft 26.1.2
 
-A NeoForge build for **Minecraft 26.1.2** (Java 25). That makes 10 builds across Forge, Fabric and NeoForge.
+A NeoForge build for **Minecraft 26.1.2** (Java 25).
 
 #### 🗂️ New: per-world catalogs (opt-in)
 
@@ -292,7 +292,7 @@ Set `unlock_scope` to `per_save` in `config/Journey Mode/save_scope.json` to giv
 *   **Faster in big packs:** thresholds are worked out once at world load instead of while you play, saves are batched instead of written on every deposit, and the client receives only what changed after a deposit.
 *   Old catalog entries re-sort themselves to the new rules on load — no duplicates, nothing lost.
 
-Applied across all 10 builds: Forge 1.12.2 / 1.16.5 / 1.19.2 / 1.20.1, Fabric 1.16.5 / 1.19.2 / 1.20.1 / 1.21.1, NeoForge 1.21.1 / 26.1.2.
+Applies to every supported version: Forge 1.12.2 / 1.16.5 / 1.19.2 / 1.20.1, Fabric 1.16.5 / 1.19.2 / 1.20.1 / 1.21.1, NeoForge 1.21.1 / 26.1.2.
 
 ### Version `1.8.1` (Critical Fixes — please update from 1.8.0)
 
