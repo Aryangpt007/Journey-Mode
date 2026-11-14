@@ -4,13 +4,13 @@
 
 ***
 
-![Supported Versions](https://img.shields.io/badge/Minecraft-1.12.2 | 1.16.5 | 1.19.2 | 1.20.1 | 1.21.1-brightgreen.svg) [![NeoForge](https://img.shields.io/badge/NeoForge-1.21.1-orange.svg)](https://neoforged.net/) [![Forge](https://img.shields.io/badge/Forge-1.12.2--1.20.1-blue.svg)](https://files.minecraftforge.net/) [![Fabric](https://img.shields.io/badge/Fabric-1.16.5--1.21.1-dbd0b4.svg)](https://fabricmc.net/) [![License](https://img.shields.io/github/license/Aryangpt007/Journey-Mode)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/Aryangpt007/Journey-Mode)](https://github.com/Aryangpt007/Journey-Mode)
+![Supported Versions](https://img.shields.io/badge/Minecraft-1.12.2 | 1.16.5 | 1.19.2 | 1.20.1 | 1.21.1 | 26.1.2-brightgreen.svg) [![NeoForge](https://img.shields.io/badge/NeoForge-1.21.1 | 26.1.2-orange.svg)](https://neoforged.net/) [![Forge](https://img.shields.io/badge/Forge-1.12.2--1.20.1-blue.svg)](https://files.minecraftforge.net/) [![Fabric](https://img.shields.io/badge/Fabric-1.16.5--1.21.1-dbd0b4.svg)](https://fabricmc.net/) [![License](https://img.shields.io/github/license/Aryangpt007/Journey-Mode)](LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/Aryangpt007/Journey-Mode)](https://github.com/Aryangpt007/Journey-Mode)
 
 ***
 
-> ### ⚠️ Running 1.8.0? Please update to 1.8.1.
+> ### ⚠️ On 1.8.1 with modded items? Update to 1.8.2.
 >
-> 1.8.0 had a game-breaking bug on certain modpacks: with some mod combinations, putting an item into the Deposit slot froze the game outright, with no crash report and nothing in the log to explain it. Four of the nine 1.8.0 downloads also shipped an unlock sound that was meant to have been removed. **Both are fixed in 1.8.1**, along with a shift-click withdrawal bug and two UI overlaps — see the [changelog](#-changelog). Updating is a drop-in replacement; your catalog, teams and config carry over untouched.
+> 1.8.1 threw away most modded item data when you researched an item, so modded items could come back broken (Apotheosis gems, TACZ guns, GregTech tools, Botania flowers), and Iron's Spells scrolls could crash the game. **1.8.2 fixes this** — see the [changelog](#-changelog). **Back up `journeymode_unlocks.json` first**: the save format is upgraded once on first launch (a backup is written automatically and nothing is lost).
 
 ***
 
@@ -216,6 +216,7 @@ Grab the file matching your Minecraft version and loader. Fabric builds require 
 
 | Minecraft    |Java |Loaders          |Minimum Loader Version                          |
 | ------------ |---- |---------------- |----------------------------------------------- |
+| <strong>26.1.2</strong> |25   |NeoForge         |NeoForge <code>26.1.2</code>                    |
 | <strong>1.21.1</strong> |21   |NeoForge, Fabric |NeoForge <code>21.1.72+</code> · Fabric <code>0.19.2+</code> + Fabric API |
 | <strong>1.20.1</strong> (LTS) |17   |Forge, Fabric    |Forge <code>47.4.10+</code> · Fabric <code>0.19.2+</code> + Fabric API |
 | <strong>1.19.2</strong> |17   |Forge, Fabric    |Forge <code>41.1.0+</code> · Fabric <code>0.14.9+</code> + Fabric API |
@@ -242,7 +243,7 @@ Install on **both client and server** for multiplayer. Singleplayer needs only t
 
 ## 🗺️ Roadmap
 
-Everything that used to be on this list — Shared Team Catalogs, Real-Time Config Sync, the Integration API (regex/tags/datapacks/dev hooks), the Global/Per-Item Threshold commands, Admin Grant/Revoke, Rarity-Aware Thresholds, Deposit All, Progress Tooltips, and Catalog Statistics — **shipped in 1.8.0**, and **1.8.1 is the fix release you want** (see the warning at the top). See the changelog below.
+Everything that used to be on this list — Shared Team Catalogs, Real-Time Config Sync, the Integration API (regex/tags/datapacks/dev hooks), the Global/Per-Item Threshold commands, Admin Grant/Revoke, Rarity-Aware Thresholds, Deposit All, Progress Tooltips, and Catalog Statistics — **shipped in 1.8.0**, and **1.8.2 is the release you want** (see the warning at the top). See the changelog below.
 
 What's next:
 
@@ -253,6 +254,45 @@ Full changelog below and on [GitHub Releases](https://github.com/Aryangpt007/Jou
 ***
 
 ## 📋 Changelog
+
+### Version `1.8.2` (Modded Items Fixed, Minecraft 26.1.2, Per-World Catalogs)
+
+**Release Date:** November 2026
+
+> ⚠️ **Back up `journeymode_unlocks.json` before updating.** 1.8.2 upgrades the save file to a new format on first launch. It writes its own backup (`journeymode_unlocks.json.bak-schema2`) and nothing is dropped, but the upgrade is one-way — going back to 1.8.1 needs that backup.
+
+#### 🧩 Fixed: modded items lost their data (and could crash the game)
+
+Up to 1.8.1, Journey Mode kept only a short list of vanilla item data (potions, enchanted books…) and threw everything else away. Modded items that depend on their own data came back broken: Apotheosis gems without their affix, TACZ guns as the wrong gun, GregTech hammers without 3×3 mining, Botania flowers as blank flowers — and Iron's Spells scrolls crashed the game when hovered.
+
+1.8.2 does the opposite: an item **keeps its modded data**, and only state that changes with use is removed. On purpose, these never carry over when you withdraw an item:
+
+*   durability, stored energy/charge, enchantments on gear, anvil renames
+*   **contents** — backpacks, storage cells, Mekanism tanks, Draconium chests, Create packages and other containers always come back empty, so nothing can be duplicated through them
+
+#### 🛡️ New: `normalization.json`
+
+A new config file decides what gets stripped. It ships with defaults for popular mods (Mekanism, AE2, Create, Draconic Evolution, Sophisticated Backpacks, Ender IO, Apotheosis, TACZ, Refined Storage and more), and pack makers can add their own rules without waiting for an update. See the Configuration section above.
+
+#### 🌍 New: Minecraft 26.1.2
+
+A NeoForge build for **Minecraft 26.1.2** (Java 25). That makes 10 builds across Forge, Fabric and NeoForge.
+
+#### 🗂️ New: per-world catalogs (opt-in)
+
+Set `unlock_scope` to `per_save` in `config/Journey Mode/save_scope.json` to give each world its own catalog. Each world starts from a copy of your existing catalog, and renaming a world folder keeps its catalog. The default is still one shared catalog — nothing changes unless you switch it on.
+
+*   `/journeymode save info` — which world and scope you're in
+*   `/journeymode save reset confirm` — wipe this world's catalog only (operator)
+
+#### 🩹 Other changes
+
+*   **Broken catalog entries no longer crash the game.** An entry that can't be rebuilt shows as a red square with a tooltip; remove it with `/journeymode purge <key>` (no operator needed).
+*   **Teams:** `/journeymode team create <name> inherit` starts the team with your current unlocks (your personal catalog stays intact). `fresh` starts empty.
+*   **Faster in big packs:** thresholds are worked out once at world load instead of while you play, saves are batched instead of written on every deposit, and the client receives only what changed after a deposit.
+*   Old catalog entries re-sort themselves to the new rules on load — no duplicates, nothing lost.
+
+Applied across all 10 builds: Forge 1.12.2 / 1.16.5 / 1.19.2 / 1.20.1, Fabric 1.16.5 / 1.19.2 / 1.20.1 / 1.21.1, NeoForge 1.21.1 / 26.1.2.
 
 ### Version `1.8.1` (Critical Fixes — please update from 1.8.0)
 
