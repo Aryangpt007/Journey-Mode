@@ -440,7 +440,7 @@ The 1.8.0 downloads for Forge 1.12.2, Forge 1.16.5, Forge 1.20.1 and NeoForge 1.
 
 *   **Source:** [GitHub — Aryangpt007/Journey-Mode](https://github.com/Aryangpt007/Journey-Mode)
 *   **Bug reports & feature requests:** [Issue Tracker](https://github.com/Aryangpt007/Journey-Mode/issues)
-*   **Also on:** [Modrinth](https://modrinth.com/mod/journey-mode) · CurseForge <!-- TODO: add your CurseForge project URL here, I couldn't verify the exact slug via API -->
+*   **Also on:** [Modrinth](https://modrinth.com/mod/journey-mode-jm) · [CurseForge](https://www.curseforge.com/minecraft/mc-mods/journey-mode)
 *   **License:** MIT
 
 **Created by Aryangpt007** • Made with ❤️ for the Minecraft community.
